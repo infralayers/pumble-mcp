@@ -1,0 +1,35 @@
+{
+  "name": "pumble-mcp",
+  "version": "0.1.0",
+  "description": "MCP server wrapping Pumble's API-key REST addon — send/read/edit messages, DMs, and list users from Claude Code.",
+  "type": "module",
+  "main": "dist/index.js",
+  "license": "MIT",
+  "author": "InfraLayers",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/infralayers/pumble-mcp.git"
+  },
+  "homepage": "https://github.com/infralayers/pumble-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/infralayers/pumble-mcp/issues"
+  },
+  "keywords": ["mcp", "pumble", "claude", "model-context-protocol", "chat"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
