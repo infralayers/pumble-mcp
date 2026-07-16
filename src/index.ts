@@ -6,6 +6,7 @@ import { editMessage, editMessageShape } from "./tools/editMessage.js";
 import { listChannels } from "./tools/listChannels.js";
 import { sendDm, sendDmSchema, sendDmShape } from "./tools/sendDm.js";
 import { listUsers } from "./tools/listUsers.js";
+import { searchMessages, searchMessagesSchema, searchMessagesShape } from "./tools/searchMessages.js";
 
 if (!process.env.PUMBLE_API_KEY) {
   console.error("PUMBLE_API_KEY environment variable is not set");
@@ -92,5 +93,17 @@ server.registerTool(
   },
 );
 
+server.registerTool(
+  "pumble_search_messages",
+  {
+    description: "Search for messages across the Pumble workspace. You can filter by text, fromUser (name/email/ID), or inChannel (name/ID). Automatically resolves names to IDs.",
+    inputSchema: searchMessagesShape,
+  },
+  async (args) => {
+    const input = searchMessagesSchema.parse(args);
+    const result = await searchMessages(input);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+);
 const transport = new StdioServerTransport();
 await server.connect(transport);
