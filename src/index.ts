@@ -6,6 +6,10 @@ import { editMessage, editMessageShape } from "./tools/editMessage.js";
 import { listChannels } from "./tools/listChannels.js";
 import { sendDm, sendDmSchema, sendDmShape } from "./tools/sendDm.js";
 import { listUsers } from "./tools/listUsers.js";
+import { getChannel, getChannelSchema, getChannelShape } from "./tools/getChannel.js";
+import { createChannel, createChannelSchema, createChannelShape } from "./tools/createChannel.js";
+import { addUsersToChannel, addUsersToChannelSchema, addUsersToChannelShape } from "./tools/addUsersToChannel.js";
+import { removeUserFromChannel, removeUserFromChannelSchema, removeUserFromChannelShape } from "./tools/removeUserFromChannel.js";
 
 if (!process.env.PUMBLE_API_KEY) {
   console.error("PUMBLE_API_KEY environment variable is not set");
@@ -56,7 +60,7 @@ server.registerTool(
   "pumble_list_channels",
   {
     description:
-      "List all Pumble channels visible to the API key, including DMs (channelType DIRECT) and group DMs. Use the channel's id with pumble_list_messages to read a DM conversation.",
+      "List all Pumble channels visible to the API key, and mention their type (public/private), including DMs (channelType DIRECT) and group DMs. Use the channel's id with pumble_list_messages to read a DM conversation.",
     inputSchema: {},
   },
   async () => {
@@ -89,6 +93,58 @@ server.registerTool(
   async () => {
     const result = await listUsers({});
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_get_channel",
+  {
+    description: "Look up a channel by its ID or Name.",
+    inputSchema: getChannelShape,
+  },
+  async (args) => {
+    const input = getChannelSchema.parse(args);
+    const result = await getChannel(input);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_create_channel",
+  {
+    description: "Create a new channel.",
+    inputSchema: createChannelShape,
+  },
+  async (args) => {
+    const input = createChannelSchema.parse(args);
+    const result = await createChannel(input);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_add_users_to_channel",
+  {
+    description: "Add users to a channel.",
+    inputSchema: addUsersToChannelShape,
+  },
+  async (args) => {
+    const input = addUsersToChannelSchema.parse(args);
+    const result = await addUsersToChannel(input);
+    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_remove_user_from_channel",
+  {
+    description: "Remove a user from a channel. This is a destructive operation and requires explicit confirmation.",
+    inputSchema: removeUserFromChannelShape,
+  },
+  async (args) => {
+    const input = removeUserFromChannelSchema.parse(args);
+    const result = await removeUserFromChannel(input);
+    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
   },
 );
 
