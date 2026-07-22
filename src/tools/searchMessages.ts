@@ -2,6 +2,15 @@ import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
 import { listUsers } from "./listUsers.js";
 import { listChannels } from "./listChannels.js";
+import {
+  describeChannelCandidates,
+  describeUserCandidates,
+  isLikelyId,
+  matchChannelsByName,
+  matchUsersByNameOrEmail,
+  type PumbleChannelListItem,
+  type PumbleUser,
+} from "./resolve.js";
 
 export const searchMessagesShape = {
   text: z.string().optional().describe("Text to search for"),
@@ -20,65 +29,56 @@ export async function searchMessages(input: SearchMessagesInput) {
   let resolvedFrom: string[] | undefined = undefined;
   let resolvedIn: string[] | undefined = undefined;
 
-  // Resolve users
+  // Resolve users. Identifiers that don't match exactly one user are passed
+  // through as-is (rather than throwing) so Pumble's own API can reject them
+  // with a clean error - this is a read-only search, not a destructive
+  // operation, so we don't need to hard-fail on an unresolved name. An
+  // *ambiguous* match is different: silently guessing which of several
+  // same-named users to search by would be a real correctness bug, so that
+  // still throws.
   if (input.fromUser && input.fromUser.length > 0) {
     resolvedFrom = [];
-    let usersList: any[] | null = null;
-    
+    let usersList: PumbleUser[] | null = null;
+
     for (const identifier of input.fromUser) {
-      // Very basic heuristic: if it contains a space or @, it's definitely not an ID (IDs are 24-char hex strings)
-      // Or if it doesn't look like a 24 character hex string
-      const isLikelyId = /^[0-9a-fA-F]{24}$/.test(identifier);
-      
-      if (isLikelyId) {
+      if (isLikelyId(identifier)) {
         resolvedFrom.push(identifier);
       } else {
         if (!usersList) {
-          usersList = await listUsers({});
+          usersList = (await listUsers({})) as PumbleUser[];
         }
-        
-        const lowerIdentifier = identifier.toLowerCase();
-        const matchedUser = usersList.find(u => 
-          (u.name && u.name.toLowerCase() === lowerIdentifier) || 
-          (u.email && u.email.toLowerCase() === lowerIdentifier)
-        );
-        
-        if (matchedUser) {
-          resolvedFrom.push(matchedUser.id);
-        } else {
-          // If we couldn't resolve it, we just pass the original string through
-          // Pumble will reject it with a clean error, which is fine
-          resolvedFrom.push(identifier);
+
+        const matches = matchUsersByNameOrEmail(identifier, usersList);
+        if (matches.length > 1) {
+          throw new Error(
+            `'${identifier}' matches multiple users in the workspace: ${describeUserCandidates(matches)}. Provide the exact user ID instead.`,
+          );
         }
+        resolvedFrom.push(matches.length === 1 ? matches[0].id : identifier);
       }
     }
   }
 
-  // Resolve channels
+  // Resolve channels - same pass-through-on-no-match, throw-on-ambiguous policy as above.
   if (input.inChannel && input.inChannel.length > 0) {
     resolvedIn = [];
-    let channelsList: any[] | null = null;
-    
+    let channelsList: PumbleChannelListItem[] | null = null;
+
     for (const identifier of input.inChannel) {
-      const isLikelyId = /^[0-9a-fA-F]{24}$/.test(identifier);
-      
-      if (isLikelyId) {
+      if (isLikelyId(identifier)) {
         resolvedIn.push(identifier);
       } else {
         if (!channelsList) {
-          channelsList = await listChannels({});
+          channelsList = (await listChannels({})) as PumbleChannelListItem[];
         }
-        
-        const lowerIdentifier = identifier.toLowerCase();
-        const matchedChannel = channelsList.find(c => 
-          c.channel && c.channel.name && c.channel.name.toLowerCase() === lowerIdentifier
-        );
-        
-        if (matchedChannel && matchedChannel.channel) {
-          resolvedIn.push(matchedChannel.channel.id);
-        } else {
-          resolvedIn.push(identifier);
+
+        const matches = matchChannelsByName(identifier, channelsList);
+        if (matches.length > 1) {
+          throw new Error(
+            `'${identifier}' matches multiple channels in the workspace: ${describeChannelCandidates(matches)}. Provide the exact channel ID instead.`,
+          );
         }
+        resolvedIn.push(matches.length === 1 ? matches[0].channel!.id : identifier);
       }
     }
   }

@@ -115,4 +115,69 @@ describe("searchMessages", () => {
       in: ["c123", "c999"]    // "office-work" -> "c123", "c999" kept as is
     });
   });
+
+  it("skips the users/channels lookup entirely when given real IDs", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url) => {
+      const urlString = url.toString();
+      if (urlString.includes("/searchMessages")) {
+        return { ok: true, text: async () => JSON.stringify([]) };
+      }
+      throw new Error(`Unexpected fetch to ${urlString}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = searchMessagesSchema.parse({
+      text: "agent",
+      fromUser: "668e30546a5ea56c5d83f46b",
+      inChannel: "668e30546a5ea56c5d83f471",
+    });
+    await searchMessages(input);
+
+    // Only /searchMessages should be called - no listUsers/listChannels lookup for real IDs
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.from).toEqual(["668e30546a5ea56c5d83f46b"]);
+    expect(body.in).toEqual(["668e30546a5ea56c5d83f471"]);
+  });
+
+  it("throws instead of guessing when fromUser matches multiple users", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url) => {
+      const urlString = url.toString();
+      if (urlString.includes("/listUsers")) {
+        return {
+          ok: true,
+          text: async () => JSON.stringify([
+            { id: "u1", name: "AbdulRehman", email: "abdul.old@example.com" },
+            { id: "u2", name: "AbdulRehman", email: "abdul.new@example.com" },
+          ]),
+        };
+      }
+      throw new Error(`Unexpected fetch to ${urlString}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = searchMessagesSchema.parse({ text: "hi", fromUser: "AbdulRehman" });
+    await expect(searchMessages(input)).rejects.toThrow(/matches multiple users/);
+  });
+
+  it("passes an unresolvable name through as-is rather than throwing", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url) => {
+      const urlString = url.toString();
+      if (urlString.includes("/listUsers")) {
+        return { ok: true, text: async () => JSON.stringify([]) };
+      }
+      if (urlString.includes("/searchMessages")) {
+        return { ok: true, text: async () => JSON.stringify([]) };
+      }
+      throw new Error(`Unexpected fetch to ${urlString}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = searchMessagesSchema.parse({ text: "hi", fromUser: "Ghost User" });
+    await searchMessages(input);
+
+    const searchCall = fetchMock.mock.calls.find((c) => c[0].toString().includes("/searchMessages"));
+    const body = JSON.parse(searchCall[1].body);
+    expect(body.from).toEqual(["Ghost User"]);
+  });
 });
