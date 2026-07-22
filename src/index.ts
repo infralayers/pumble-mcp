@@ -6,6 +6,7 @@ import { editMessage, editMessageShape } from "./tools/editMessage.js";
 import { listChannels } from "./tools/listChannels.js";
 import { sendDm, sendDmSchema, sendDmShape } from "./tools/sendDm.js";
 import { listUsers } from "./tools/listUsers.js";
+import { searchMessages, searchMessagesSchema, searchMessagesShape } from "./tools/searchMessages.js";
 import { addReaction, addReactionShape } from "./tools/addReaction.js";
 import { removeReaction, removeReactionShape } from "./tools/removeReaction.js";
 
@@ -90,6 +91,19 @@ server.registerTool(
   },
   async () => {
     const result = await listUsers({});
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_search_messages",
+  {
+    description: "Search for messages across the Pumble workspace. You can filter by text, fromUser (name/email/ID), or inChannel (name/ID). Automatically resolves names to IDs.",
+    inputSchema: searchMessagesShape,
+  },
+  async (args) => {
+    const input = searchMessagesSchema.parse(args);
+    const result = await searchMessages(input);
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
   },
 );
