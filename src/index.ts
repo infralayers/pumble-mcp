@@ -101,7 +101,7 @@ server.registerTool(
     inputSchema: addReactionShape,
   },
   async (args) => {
-    const result = await addReaction(args as any);
+    const result = await addReaction(args);
     return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
   },
 );
@@ -113,7 +113,7 @@ server.registerTool(
     inputSchema: removeReactionShape,
   },
   async (args) => {
-    const result = await removeReaction(args as any);
+    const result = await removeReaction(args);
     return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
   },
 );
