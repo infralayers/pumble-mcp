@@ -118,4 +118,48 @@ describe("removeUserFromChannel", () => {
     // Must not call the removal API when the target is ambiguous
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("throws an error if the channel name cannot be resolved", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ // listChannels
+        ok: true,
+        text: async () => JSON.stringify([{ channel: { id: "chan1", name: "general" } }]),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = removeUserFromChannelSchema.parse({
+      channel: "nonexistent-channel",
+      user: "usr1",
+      confirm: true,
+    });
+
+    await expect(removeUserFromChannel(input)).rejects.toThrow(/Channel with name 'nonexistent-channel' could not be found/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves the user by name case-insensitively", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ // listUsers
+        ok: true,
+        text: async () => JSON.stringify([{ id: "usr1", name: "Aliyan Hammad" }]),
+      })
+      .mockResolvedValueOnce({ // removeUserFromChannel
+        ok: true,
+        text: async () => JSON.stringify({ success: true }),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = removeUserFromChannelSchema.parse({
+      channelId: "chan1",
+      user: "ALIYAN HAMMAD",
+      confirm: true,
+    });
+
+    await removeUserFromChannel(input);
+
+    const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(body.userId).toBe("usr1");
+  });
 });

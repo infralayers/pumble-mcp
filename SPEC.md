@@ -144,13 +144,15 @@ export async function pumbleRequest<T>(
 - **Always do:** validate `channel`/`channelId` XOR before calling Pumble;
   surface Pumble's raw error text on failures; keep the API key out of git
   (`.env`, gitignored).
-- **Ask first:** adding new Pumble endpoints beyond the four listed above;
+- **Ask first:** adding new Pumble endpoints beyond what's already wired up;
   changing the tool names once Claude Code config references them; adding
   any dependency beyond `@modelcontextprotocol/sdk`, `zod`, and dev/test
   tooling.
-- **Never do:** log the raw API key; commit `.env`; call destructive Pumble
-  endpoints (`deleteMessage`, `removeUserFromChannel`, etc.) — not in scope,
-  don't add them without an explicit ask.
+- **Never do:** log the raw API key; commit `.env`; call a destructive Pumble
+  endpoint without an explicit confirmation gate. `removeUserFromChannel` is
+  the one destructive endpoint in scope, and only because it requires the
+  caller to pass `confirm: true`; `deleteMessage` and similar remain out of
+  scope — don't add them without an explicit ask.
 
 ## Success Criteria
 

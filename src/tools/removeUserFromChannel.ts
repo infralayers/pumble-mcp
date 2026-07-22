@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
-import { listChannels } from "./listChannels.js";
-import { listUsers } from "./listUsers.js";
+import { resolveChannelId, resolveUserId } from "./resolve.js";
 
 export const removeUserFromChannelShape = {
   channel: z.string().optional().describe("Channel name (provide this OR channelId)"),
@@ -21,53 +20,9 @@ export const removeUserFromChannelSchema = z
 export type RemoveUserFromChannelInput = z.infer<typeof removeUserFromChannelSchema>;
 
 export async function removeUserFromChannel(input: RemoveUserFromChannelInput) {
-  let targetChannelId = input.channelId;
+  const targetChannelId = input.channel ? await resolveChannelId(input.channel) : input.channelId!;
+  const resolvedUserId = await resolveUserId(input.user);
 
-  // 1. Resolve Channel
-  if (input.channel) {
-    const channelsList = (await listChannels({})) as any[];
-    const lowerIdentifier = input.channel.toLowerCase();
-    
-    const matchedChannel = channelsList.find((c: any) => 
-      c.channel && c.channel.name && c.channel.name.toLowerCase() === lowerIdentifier
-    );
-
-    if (matchedChannel && matchedChannel.channel) {
-      targetChannelId = matchedChannel.channel.id;
-    } else {
-      throw new Error(`Channel with name '${input.channel}' could not be found in the workspace.`);
-    }
-  }
-
-  // 2. Resolve User
-  let resolvedUserId: string = input.user;
-  const isLikelyId = /^[0-9a-fA-F]{24}$/.test(input.user);
-    
-  if (!isLikelyId) {
-    const usersList = (await listUsers({})) as any[];
-    const lowerIdentifier = input.user.toLowerCase();
-
-    const matchedUsers = usersList.filter((u: any) =>
-      (u.name && u.name.toLowerCase() === lowerIdentifier) ||
-      (u.email && u.email.toLowerCase() === lowerIdentifier)
-    );
-
-    if (matchedUsers.length === 0) {
-      throw new Error(`User '${input.user}' could not be found in the workspace.`);
-    }
-    if (matchedUsers.length > 1) {
-      const candidates = matchedUsers
-        .map((u: any) => `${u.name} <${u.email || "no email"}> (id: ${u.id})`)
-        .join(", ");
-      throw new Error(
-        `'${input.user}' matches multiple users in the workspace: ${candidates}. Provide the exact user ID instead.`
-      );
-    }
-
-    resolvedUserId = matchedUsers[0].id;
-  }
-
-  // 3. Make API Call
   return pumbleRequest<unknown>("/removeUserFromChannel", {
     method: "POST",
     body: {

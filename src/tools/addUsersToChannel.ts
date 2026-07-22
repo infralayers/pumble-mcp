@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
-import { listChannels } from "./listChannels.js";
 import { listUsers } from "./listUsers.js";
+import {
+  describeUserCandidates,
+  isLikelyId,
+  matchUsersByNameOrEmail,
+  resolveChannelId,
+  type PumbleUser,
+} from "./resolve.js";
 
 export const addUsersToChannelShape = {
   channel: z.string().optional().describe("Channel name (provide this OR channelId)"),
@@ -18,61 +24,33 @@ export const addUsersToChannelSchema = z
 export type AddUsersToChannelInput = z.infer<typeof addUsersToChannelSchema>;
 
 export async function addUsersToChannel(input: AddUsersToChannelInput) {
-  let targetChannelId = input.channelId;
+  const targetChannelId = input.channel ? await resolveChannelId(input.channel) : input.channelId!;
 
-  // 1. Resolve Channel
-  if (input.channel) {
-    const channelsList = (await listChannels({})) as any[];
-    const lowerIdentifier = input.channel.toLowerCase();
-    
-    const matchedChannel = channelsList.find((c: any) => 
-      c.channel && c.channel.name && c.channel.name.toLowerCase() === lowerIdentifier
-    );
-
-    if (matchedChannel && matchedChannel.channel) {
-      targetChannelId = matchedChannel.channel.id;
-    } else {
-      throw new Error(`Channel with name '${input.channel}' could not be found in the workspace.`);
-    }
-  }
-
-  // 2. Resolve Users
   const resolvedUserIds: string[] = [];
-  let usersList: any[] | null = null;
+  let usersList: PumbleUser[] | null = null;
 
   for (const identifier of input.users) {
-    const isLikelyId = /^[0-9a-fA-F]{24}$/.test(identifier);
-    
-    if (isLikelyId) {
+    if (isLikelyId(identifier)) {
       resolvedUserIds.push(identifier);
-    } else {
-      if (!usersList) {
-        usersList = (await listUsers({})) as any[];
-      }
-      
-      const lowerIdentifier = identifier.toLowerCase();
-      const matchedUsers = usersList.filter((u: any) =>
-        (u.name && u.name.toLowerCase() === lowerIdentifier) ||
-        (u.email && u.email.toLowerCase() === lowerIdentifier)
-      );
-
-      if (matchedUsers.length === 0) {
-        throw new Error(`User '${identifier}' could not be found in the workspace.`);
-      }
-      if (matchedUsers.length > 1) {
-        const candidates = matchedUsers
-          .map((u: any) => `${u.name} <${u.email || "no email"}> (id: ${u.id})`)
-          .join(", ");
-        throw new Error(
-          `'${identifier}' matches multiple users in the workspace: ${candidates}. Provide the exact user ID instead.`
-        );
-      }
-
-      resolvedUserIds.push(matchedUsers[0].id);
+      continue;
     }
+
+    if (!usersList) {
+      usersList = (await listUsers({})) as PumbleUser[];
+    }
+
+    const matches = matchUsersByNameOrEmail(identifier, usersList);
+    if (matches.length === 0) {
+      throw new Error(`User '${identifier}' could not be found in the workspace.`);
+    }
+    if (matches.length > 1) {
+      throw new Error(
+        `'${identifier}' matches multiple users in the workspace: ${describeUserCandidates(matches)}. Provide the exact user ID instead.`,
+      );
+    }
+    resolvedUserIds.push(matches[0].id);
   }
 
-  // 3. Make API Call
   return pumbleRequest<unknown>("/addUsersToChannel", {
     method: "POST",
     body: {

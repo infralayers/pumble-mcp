@@ -117,4 +117,48 @@ describe("addUsersToChannel", () => {
     // Must not call the add API when the target is ambiguous
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("throws an error if the channel name cannot be resolved", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ // listChannels
+        ok: true,
+        text: async () => JSON.stringify([{ channel: { id: "chan1", name: "general" } }]),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = addUsersToChannelSchema.parse({
+      channel: "nonexistent-channel",
+      users: ["usr1"],
+    });
+
+    await expect(addUsersToChannel(input)).rejects.toThrow(/Channel with name 'nonexistent-channel' could not be found/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves users by name and email case-insensitively", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ // listUsers
+        ok: true,
+        text: async () => JSON.stringify([
+          { id: "usr1", name: "Aliyan Hammad", email: "aliyan@example.com" },
+        ]),
+      })
+      .mockResolvedValueOnce({ // addUsersToChannel
+        ok: true,
+        text: async () => JSON.stringify({ success: true }),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = addUsersToChannelSchema.parse({
+      channelId: "chan1",
+      users: ["ALIYAN HAMMAD"],
+    });
+
+    await addUsersToChannel(input);
+
+    const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(body.userIds).toEqual(["usr1"]);
+  });
 });
