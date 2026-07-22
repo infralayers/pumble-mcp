@@ -6,6 +6,8 @@ import { editMessage, editMessageShape } from "./tools/editMessage.js";
 import { listChannels } from "./tools/listChannels.js";
 import { sendDm, sendDmSchema, sendDmShape } from "./tools/sendDm.js";
 import { listUsers } from "./tools/listUsers.js";
+import { addReaction, addReactionShape } from "./tools/addReaction.js";
+import { removeReaction, removeReactionShape } from "./tools/removeReaction.js";
 
 if (!process.env.PUMBLE_API_KEY) {
   console.error("PUMBLE_API_KEY environment variable is not set");
@@ -89,6 +91,30 @@ server.registerTool(
   async () => {
     const result = await listUsers({});
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_add_reaction",
+  {
+    description: "Add an emoji reaction to a message in Pumble.",
+    inputSchema: addReactionShape,
+  },
+  async (args) => {
+    const result = await addReaction(args);
+    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_remove_reaction",
+  {
+    description: "Remove an emoji reaction from a message in Pumble.",
+    inputSchema: removeReactionShape,
+  },
+  async (args) => {
+    const result = await removeReaction(args);
+    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
   },
 );
 
