@@ -10,6 +10,9 @@ import { getChannel, getChannelSchema, getChannelShape } from "./tools/getChanne
 import { createChannel, createChannelSchema, createChannelShape } from "./tools/createChannel.js";
 import { addUsersToChannel, addUsersToChannelSchema, addUsersToChannelShape } from "./tools/addUsersToChannel.js";
 import { removeUserFromChannel, removeUserFromChannelSchema, removeUserFromChannelShape } from "./tools/removeUserFromChannel.js";
+import { searchMessages, searchMessagesSchema, searchMessagesShape } from "./tools/searchMessages.js";
+import { addReaction, addReactionShape } from "./tools/addReaction.js";
+import { removeReaction, removeReactionShape } from "./tools/removeReaction.js";
 
 if (!process.env.PUMBLE_API_KEY) {
   console.error("PUMBLE_API_KEY environment variable is not set");
@@ -93,6 +96,43 @@ server.registerTool(
   async () => {
     const result = await listUsers({});
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_search_messages",
+  {
+    description: "Search for messages across the Pumble workspace. You can filter by text, fromUser (name/email/ID), or inChannel (name/ID). Automatically resolves names to IDs.",
+    inputSchema: searchMessagesShape,
+  },
+  async (args) => {
+    const input = searchMessagesSchema.parse(args);
+    const result = await searchMessages(input);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_add_reaction",
+  {
+    description: "Add an emoji reaction to a message in Pumble.",
+    inputSchema: addReactionShape,
+  },
+  async (args) => {
+    const result = await addReaction(args);
+    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_remove_reaction",
+  {
+    description: "Remove an emoji reaction from a message in Pumble.",
+    inputSchema: removeReactionShape,
+  },
+  async (args) => {
+    const result = await removeReaction(args);
+    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
   },
 );
 
