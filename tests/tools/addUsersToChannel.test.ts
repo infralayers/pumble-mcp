@@ -93,6 +93,28 @@ describe("addUsersToChannel", () => {
     
     await expect(addUsersToChannel(input)).rejects.toThrow(/User 'Ghost User' could not be found/);
     // API should not be called if resolution fails
-    expect(fetchMock).toHaveBeenCalledTimes(1); 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws an error instead of silently picking a match when the name is ambiguous", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ // listUsers
+        ok: true,
+        text: async () => JSON.stringify([
+          { id: "usr1", name: "AbdulRehman", email: "abdul.old@example.com" },
+          { id: "usr2", name: "AbdulRehman", email: "abdul.new@example.com" },
+        ]),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = addUsersToChannelSchema.parse({
+      channelId: "chan1",
+      users: ["AbdulRehman"],
+    });
+
+    await expect(addUsersToChannel(input)).rejects.toThrow(/matches multiple users/);
+    // Must not call the add API when the target is ambiguous
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

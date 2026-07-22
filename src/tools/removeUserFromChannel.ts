@@ -46,17 +46,25 @@ export async function removeUserFromChannel(input: RemoveUserFromChannelInput) {
   if (!isLikelyId) {
     const usersList = (await listUsers({})) as any[];
     const lowerIdentifier = input.user.toLowerCase();
-      
-    const matchedUser = usersList.find((u: any) => 
-      (u.name && u.name.toLowerCase() === lowerIdentifier) || 
+
+    const matchedUsers = usersList.filter((u: any) =>
+      (u.name && u.name.toLowerCase() === lowerIdentifier) ||
       (u.email && u.email.toLowerCase() === lowerIdentifier)
     );
-      
-    if (matchedUser) {
-      resolvedUserId = matchedUser.id;
-    } else {
+
+    if (matchedUsers.length === 0) {
       throw new Error(`User '${input.user}' could not be found in the workspace.`);
     }
+    if (matchedUsers.length > 1) {
+      const candidates = matchedUsers
+        .map((u: any) => `${u.name} <${u.email || "no email"}> (id: ${u.id})`)
+        .join(", ");
+      throw new Error(
+        `'${input.user}' matches multiple users in the workspace: ${candidates}. Provide the exact user ID instead.`
+      );
+    }
+
+    resolvedUserId = matchedUsers[0].id;
   }
 
   // 3. Make API Call

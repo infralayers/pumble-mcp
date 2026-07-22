@@ -51,16 +51,24 @@ export async function addUsersToChannel(input: AddUsersToChannelInput) {
       }
       
       const lowerIdentifier = identifier.toLowerCase();
-      const matchedUser = usersList.find((u: any) => 
-        (u.name && u.name.toLowerCase() === lowerIdentifier) || 
+      const matchedUsers = usersList.filter((u: any) =>
+        (u.name && u.name.toLowerCase() === lowerIdentifier) ||
         (u.email && u.email.toLowerCase() === lowerIdentifier)
       );
-      
-      if (matchedUser) {
-        resolvedUserIds.push(matchedUser.id);
-      } else {
+
+      if (matchedUsers.length === 0) {
         throw new Error(`User '${identifier}' could not be found in the workspace.`);
       }
+      if (matchedUsers.length > 1) {
+        const candidates = matchedUsers
+          .map((u: any) => `${u.name} <${u.email || "no email"}> (id: ${u.id})`)
+          .join(", ");
+        throw new Error(
+          `'${identifier}' matches multiple users in the workspace: ${candidates}. Provide the exact user ID instead.`
+        );
+      }
+
+      resolvedUserIds.push(matchedUsers[0].id);
     }
   }
 
