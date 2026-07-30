@@ -3,25 +3,20 @@ import { pumbleRequest } from "../pumbleClient.js";
 import { resolveChannelId, resolveUserId } from "./resolve.js";
 
 export const removeUserFromChannelShape = {
-  channel: z.string().optional().describe("Channel name (provide this OR channelId)"),
-  channelId: z.string().optional().describe("Channel ID (provide this OR channel)"),
-  user: z.string().describe("User name, email, or 24-character ID to remove"),
+  channelIdentifier: z.string().min(1).describe("The name or ID of the channel. (Do not guess)"),
+  userIdentifier: z.string().min(1).describe("The name, email, or ID of the user to remove. (Do not guess)"),
   confirm: z.literal(true, {
     errorMap: () => ({ message: "You MUST explicitly set confirm: true to perform this destructive operation" })
   }).describe("Explicit confirmation boolean. Must be true."),
 };
 
-export const removeUserFromChannelSchema = z
-  .object(removeUserFromChannelShape)
-  .refine((v) => Boolean(v.channel) !== Boolean(v.channelId), {
-    message: "Provide exactly one of `channel` or `channelId`",
-  });
+export const removeUserFromChannelSchema = z.object(removeUserFromChannelShape);
 
 export type RemoveUserFromChannelInput = z.infer<typeof removeUserFromChannelSchema>;
 
 export async function removeUserFromChannel(input: RemoveUserFromChannelInput) {
-  const targetChannelId = input.channel ? await resolveChannelId(input.channel) : input.channelId!;
-  const resolvedUserId = await resolveUserId(input.user);
+  const targetChannelId = await resolveChannelId(input.channelIdentifier);
+  const resolvedUserId = await resolveUserId(input.userIdentifier);
 
   return pumbleRequest<unknown>("/removeUserFromChannel", {
     method: "POST",
