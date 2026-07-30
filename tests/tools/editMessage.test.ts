@@ -18,7 +18,7 @@ describe("editMessage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await editMessage({ messageId: "m1", channelId: "c1", text: "updated" });
+    await editMessage({ messageId: "m1", channelIdentifier: "c1", text: "updated" });
 
     const [url, options] = fetchMock.mock.calls[0];
     expect(url.toString()).toBe("https://pumble-api-keys.addons.marketplace.cake.com/editMessage");
@@ -34,7 +34,7 @@ describe("editMessage", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      editMessage({ messageId: "m1", channelId: "c1", text: "updated" }),
+      editMessage({ messageId: "m1", channelIdentifier: "c1", text: "updated" }),
     ).rejects.toThrow(/Invalid request parameters/);
   });
 });

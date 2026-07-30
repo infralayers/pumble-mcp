@@ -2,16 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sendDm, sendDmSchema } from "../../src/tools/sendDm.js";
 
 describe("sendDmSchema", () => {
-  it("rejects when neither userId nor email is given", () => {
+  it("rejects when userIdentifier is missing", () => {
     expect(sendDmSchema.safeParse({ text: "hi" }).success).toBe(false);
   });
 
-  it("rejects when both userId and email are given", () => {
-    expect(
-      sendDmSchema.safeParse({ userId: "u1", email: "a@b.com", text: "hi" }).success,
-    ).toBe(false);
   });
-});
 
 describe("sendDm", () => {
   beforeEach(() => {

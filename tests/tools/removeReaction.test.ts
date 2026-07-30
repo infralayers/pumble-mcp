@@ -18,7 +18,7 @@ describe("removeReaction", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await removeReaction({ messageId: "m1", channelId: "c1", reaction: ":thumbsup:" });
+    await removeReaction({ messageId: "m1", channelIdentifier: "c1", reaction: ":thumbsup:" });
 
     const [url, options] = fetchMock.mock.calls[0];
     const urlObj = new URL(url);
@@ -38,7 +38,7 @@ describe("removeReaction", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      removeReaction({ messageId: "m1", channelId: "c1", reaction: ":thumbsup:" }),
+      removeReaction({ messageId: "m1", channelIdentifier: "c1", reaction: ":thumbsup:" }),
     ).rejects.toThrow(/Invalid request parameters/);
   });
 });

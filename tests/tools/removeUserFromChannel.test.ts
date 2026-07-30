@@ -2,27 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { removeUserFromChannel, removeUserFromChannelSchema } from "../../src/tools/removeUserFromChannel.js";
 
 describe("removeUserFromChannelSchema", () => {
-  it("rejects when neither channel nor channelId is given", () => {
+  it("rejects when channelIdentifier is missing", () => {
     expect(removeUserFromChannelSchema.safeParse({ user: "usr1", confirm: true }).success).toBe(false);
   });
 
-  it("rejects when both channel and channelId are given", () => {
-    expect(
-      removeUserFromChannelSchema.safeParse({ channel: "general", channelId: "abc", user: "usr1", confirm: true }).success,
-    ).toBe(false);
-  });
-
-  it("rejects when user is missing", () => {
-    expect(removeUserFromChannelSchema.safeParse({ channelId: "abc", confirm: true }).success).toBe(false);
+    it("rejects when user is missing", () => {
+    expect(removeUserFromChannelSchema.safeParse({ channelIdentifier: "c1", confirm: true }).success).toBe(false);
   });
 
   it("rejects when confirm is missing or false", () => {
-    expect(removeUserFromChannelSchema.safeParse({ channelId: "abc", user: "usr1" }).success).toBe(false);
-    expect(removeUserFromChannelSchema.safeParse({ channelId: "abc", user: "usr1", confirm: false }).success).toBe(false);
+    expect(removeUserFromChannelSchema.safeParse({ channelIdentifier: "c1", user: "usr1" }).success).toBe(false);
+    expect(removeUserFromChannelSchema.safeParse({ channelIdentifier: "c1", user: "usr1", confirm: false }).success).toBe(false);
   });
 
   it("accepts valid input with confirm: true", () => {
-    expect(removeUserFromChannelSchema.safeParse({ channelId: "abc", user: "usr1", confirm: true }).success).toBe(true);
+    expect(removeUserFromChannelSchema.safeParse({ channelIdentifier: "c1", user: "usr1", confirm: true }).success).toBe(true);
   });
 });
 
@@ -48,7 +42,7 @@ describe("removeUserFromChannel", () => {
       .mockResolvedValueOnce({ // listUsers
         ok: true,
         text: async () => JSON.stringify([
-          { id: "usr1", name: "Jordan Blake" }
+          { id: "usr1", name: "Aliyan Hammad" }
         ]),
       })
       .mockResolvedValueOnce({ // removeUserFromChannel
@@ -59,8 +53,8 @@ describe("removeUserFromChannel", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const input = removeUserFromChannelSchema.parse({
-      channel: "general",
-      user: "Jordan Blake",
+      channelIdentifier: "general",
+      user: "Aliyan Hammad",
       confirm: true
     });
     
@@ -87,7 +81,7 @@ describe("removeUserFromChannel", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const input = removeUserFromChannelSchema.parse({
-      channelId: "chan1",
+      channelIdentifier: "chan1",
       user: "Ghost User",
       confirm: true
     });
@@ -101,20 +95,20 @@ describe("removeUserFromChannel", () => {
       .mockResolvedValueOnce({ // listUsers
         ok: true,
         text: async () => JSON.stringify([
-          { id: "usr1", name: "Casey Morgan", email: "casey.old@example.com" },
-          { id: "usr2", name: "Casey Morgan", email: "casey.new@example.com" },
+          { id: "usr1", name: "AbdulRehman", email: "abdul.old@example.com" },
+          { id: "usr2", name: "AbdulRehman", email: "abdul.new@example.com" },
         ]),
       });
 
     vi.stubGlobal("fetch", fetchMock);
 
     const input = removeUserFromChannelSchema.parse({
-      channelId: "chan1",
-      user: "Casey Morgan",
+      channelIdentifier: "chan1",
+      user: "AbdulRehman",
       confirm: true,
     });
 
-    await expect(removeUserFromChannel(input)).rejects.toThrow(/Ambiguous name 'Casey Morgan'. Multiple matches found:.*CRITICAL RULE: DO NOT guess/);
+    await expect(removeUserFromChannel(input)).rejects.toThrow(/Ambiguous name 'AbdulRehman'. Multiple matches found:.*CRITICAL RULE: DO NOT guess/);
     // Must not call the removal API when the target is ambiguous
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -129,7 +123,7 @@ describe("removeUserFromChannel", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const input = removeUserFromChannelSchema.parse({
-      channel: "nonexistent-channel",
+      channelIdentifier: "nonexistent-channel",
       user: "usr1",
       confirm: true,
     });
@@ -142,7 +136,7 @@ describe("removeUserFromChannel", () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ // listUsers
         ok: true,
-        text: async () => JSON.stringify([{ id: "usr1", name: "Jordan Blake" }]),
+        text: async () => JSON.stringify([{ id: "usr1", name: "Aliyan Hammad" }]),
       })
       .mockResolvedValueOnce({ // removeUserFromChannel
         ok: true,
@@ -152,8 +146,8 @@ describe("removeUserFromChannel", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const input = removeUserFromChannelSchema.parse({
-      channelId: "chan1",
-      user: "JORDAN BLAKE",
+      channelIdentifier: "chan1",
+      user: "ALIYAN HAMMAD",
       confirm: true,
     });
 

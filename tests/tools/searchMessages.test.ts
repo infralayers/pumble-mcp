@@ -7,20 +7,20 @@ describe("searchMessagesSchema", () => {
   });
 
   it("accepts when only text is provided", () => {
-    expect(searchMessagesSchema.safeParse({ text: "status update" }).success).toBe(true);
+    expect(searchMessagesSchema.safeParse({ text: "dokploy" }).success).toBe(true);
   });
 
   it("accepts when only fromUser is provided", () => {
-    expect(searchMessagesSchema.safeParse({ fromUser: "sam" }).success).toBe(true);
+    expect(searchMessagesSchema.safeParse({ fromUser: "nouman" }).success).toBe(true);
   });
 
   it("accepts when only inChannel is provided", () => {
-    expect(searchMessagesSchema.safeParse({ inChannel: "project-alpha" }).success).toBe(true);
+    expect(searchMessagesSchema.safeParse({ inChannel: "office-work" }).success).toBe(true);
   });
 
   it("transforms single string fromUser/inChannel to array", () => {
-    const result = searchMessagesSchema.parse({ fromUser: "sam", inChannel: "general" });
-    expect(result.fromUser).toEqual(["sam"]);
+    const result = searchMessagesSchema.parse({ fromUser: "nouman", inChannel: "general" });
+    expect(result.fromUser).toEqual(["nouman"]);
     expect(result.inChannel).toEqual(["general"]);
   });
   
@@ -67,10 +67,10 @@ describe("searchMessages", () => {
         return {
           ok: true,
           text: async () => JSON.stringify([
-            { id: "u123", name: "sam", email: "sam@example.com" }
+            { id: "u123", name: "nouman", email: "nouman@example.com" }
           ]),
           json: async () => [
-            { id: "u123", name: "sam", email: "sam@example.com" }
+            { id: "u123", name: "nouman", email: "nouman@example.com" }
           ],
         };
       }
@@ -78,10 +78,10 @@ describe("searchMessages", () => {
         return {
           ok: true,
           text: async () => JSON.stringify([
-            { channel: { id: "c123", name: "project-alpha" } }
+            { channel: { id: "c123", name: "office-work" } }
           ]),
           json: async () => [
-            { channel: { id: "c123", name: "project-alpha" } }
+            { channel: { id: "c123", name: "office-work" } }
           ],
         };
       }
@@ -97,8 +97,8 @@ describe("searchMessages", () => {
 
     const input = searchMessagesSchema.parse({ 
       text: "agent", 
-      fromUser: ["sam", "u999"], 
-      inChannel: ["project-alpha", "c999"] 
+      fromUser: ["nouman", "u999"], 
+      inChannel: ["office-work", "c999"] 
     });
     const result = await searchMessages(input);
 
@@ -111,8 +111,8 @@ describe("searchMessages", () => {
     const body = JSON.parse(searchCall[1].body);
     expect(body).toEqual({
       text: "agent",
-      from: ["u123", "u999"], // "sam" -> "u123", "u999" kept as is
-      in: ["c123", "c999"]    // "project-alpha" -> "c123", "c999" kept as is
+      from: ["u123", "u999"], // "nouman" -> "u123", "u999" kept as is
+      in: ["c123", "c999"]    // "office-work" -> "c123", "c999" kept as is
     });
   });
 
@@ -128,16 +128,16 @@ describe("searchMessages", () => {
 
     const input = searchMessagesSchema.parse({
       text: "agent",
-      fromUser: "507f1f77bcf86cd799439011",
-      inChannel: "507f1f77bcf86cd799439012",
+      fromUser: "668e30546a5ea56c5d83f46b",
+      inChannel: "668e30546a5ea56c5d83f471",
     });
     await searchMessages(input);
 
     // Only /searchMessages should be called - no listUsers/listChannels lookup for real IDs
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.from).toEqual(["507f1f77bcf86cd799439011"]);
-    expect(body.in).toEqual(["507f1f77bcf86cd799439012"]);
+    expect(body.fromUserIds).toEqual(["668e30546a5ea56c5d83f46b"]);
+    expect(body.inChannelIds).toEqual(["668e30546a5ea56c5d83f471"]);
   });
 
   it("throws instead of guessing when fromUser matches multiple users", async () => {
@@ -147,8 +147,8 @@ describe("searchMessages", () => {
         return {
           ok: true,
           text: async () => JSON.stringify([
-            { id: "u1", name: "Casey Morgan", email: "casey.old@example.com" },
-            { id: "u2", name: "Casey Morgan", email: "casey.new@example.com" },
+            { id: "u1", name: "AbdulRehman", email: "abdul.old@example.com" },
+            { id: "u2", name: "AbdulRehman", email: "abdul.new@example.com" },
           ]),
         };
       }
@@ -156,7 +156,7 @@ describe("searchMessages", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const input = searchMessagesSchema.parse({ text: "hi", fromUser: "Casey Morgan" });
+    const input = searchMessagesSchema.parse({ text: "hi", fromUser: "AbdulRehman" });
     await expect(searchMessages(input)).rejects.toThrow(/matches multiple users/);
   });
 
@@ -178,6 +178,6 @@ describe("searchMessages", () => {
 
     const searchCall = fetchMock.mock.calls.find((c) => c[0].toString().includes("/searchMessages"));
     const body = JSON.parse(searchCall[1].body);
-    expect(body.from).toEqual(["Ghost User"]);
+    expect(body.fromUserIds).toEqual(["Ghost User"]);
   });
 });

@@ -2,18 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sendMessage, sendMessageSchema } from "../../src/tools/sendMessage.js";
 
 describe("sendMessageSchema", () => {
-  it("rejects when neither channel nor channelId is given", () => {
+  it("rejects when channelIdentifier is missing", () => {
     expect(sendMessageSchema.safeParse({ text: "hi" }).success).toBe(false);
   });
 
-  it("rejects when both channel and channelId are given", () => {
-    expect(
-      sendMessageSchema.safeParse({ channel: "general", channelId: "abc", text: "hi" }).success,
-    ).toBe(false);
-  });
-
-  it("accepts channelId alone and defaults asBot to false", () => {
-    const result = sendMessageSchema.parse({ channelId: "abc", text: "hi" });
+    it("accepts channelIdentifier and defaults asBot to false", () => {
+    const result = sendMessageSchema.parse({ channelIdentifier: "c1", text: "hi" });
     expect(result.asBot).toBe(false);
   });
 });
@@ -35,7 +29,7 @@ describe("sendMessage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const input = sendMessageSchema.parse({ channelId: "abc", text: "hello" });
+    const input = sendMessageSchema.parse({ channelIdentifier: "c1", text: "hello" });
     const result = await sendMessage(input);
 
     expect(result).toEqual({ id: "msg1" });

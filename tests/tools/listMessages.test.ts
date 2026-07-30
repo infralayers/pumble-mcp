@@ -2,16 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { listMessages, listMessagesSchema } from "../../src/tools/listMessages.js";
 
 describe("listMessagesSchema", () => {
-  it("rejects when neither channel nor channelId is given", () => {
+  it("rejects when channelIdentifier is missing", () => {
     expect(listMessagesSchema.safeParse({}).success).toBe(false);
   });
 
-  it("rejects when both channel and channelId are given", () => {
-    expect(
-      listMessagesSchema.safeParse({ channel: "general", channelId: "abc" }).success,
-    ).toBe(false);
   });
-});
 
 describe("listMessages", () => {
   beforeEach(() => {
@@ -30,13 +25,13 @@ describe("listMessages", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const input = listMessagesSchema.parse({ channelId: "abc", limit: 5, cursor: "c1" });
+    const input = listMessagesSchema.parse({ channelIdentifier: "c1", limit: 5, cursor: "c1" });
     const result = await listMessages(input);
 
     expect(result.messages).toEqual([{ id: "m1" }]);
     const [url] = fetchMock.mock.calls[0];
     expect(url.toString()).toBe(
-      "https://pumble-api-keys.addons.marketplace.cake.com/listMessages?channelId=abc&cursor=c1&limit=5",
+      "https://pumble-api-keys.addons.marketplace.cake.com/listMessages?channelId=c1&cursor=c1&limit=5",
     );
   });
 
@@ -47,12 +42,12 @@ describe("listMessages", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const input = listMessagesSchema.parse({ channel: "general" });
+    const input = listMessagesSchema.parse({ channelIdentifier: "c2" });
     await listMessages(input);
 
     const [url] = fetchMock.mock.calls[0];
     expect(url.toString()).toBe(
-      "https://pumble-api-keys.addons.marketplace.cake.com/listMessages?channel=general",
+      "https://pumble-api-keys.addons.marketplace.cake.com/listMessages?channelId=c2",
     );
   });
 });
