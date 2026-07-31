@@ -1,59 +1,43 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createScheduledMessageSchema, createScheduledMessage } from "../../src/tools/createScheduledMessage.js";
+import { createScheduledMessage, createScheduledMessageSchema } from "../../src/tools/createScheduledMessage.js";
 
 describe("createScheduledMessageSchema", () => {
-  it("validates valid input with channelId and epoch timestamp", () => {
-    const res = createScheduledMessageSchema.safeParse({
-      channelIdentifier: "6a5a28d83130c76707112bc8",
-      text: "Hello future",
-      sendAt: 1784620000000,
-    });
-    expect(res.success).toBe(true);
-  });
-
-  it("validates valid input with channel name and ISO date string", () => {
-    const res = createScheduledMessageSchema.safeParse({
-      channelIdentifier: "general",
-      text: "Hello future ISO",
-      sendAt: "2026-07-21T18:00:00Z",
-    });
-    expect(res.success).toBe(true);
-  });
-
-  it("validates valid input with userId", () => {
-    const res = createScheduledMessageSchema.safeParse({
-      userIdentifier: "668e30546a5ea56c5d83f46b",
-      text: "Hello user",
-      sendAt: 1784620000000,
-    });
-    expect(res.success).toBe(true);
-  });
-
-  it("validates valid input with email", () => {
-    const res = createScheduledMessageSchema.safeParse({
-      email: "nouman@proton.me",
-      text: "Hello email",
-      sendAt: 1784620000000,
-    });
-    expect(res.success).toBe(true);
-  });
-
-  it("fails when missing destination targets", () => {
-    const res = createScheduledMessageSchema.safeParse({
-      text: "No destination",
-      sendAt: 1784620000000,
-    });
+  it("rejects when neither channelIdentifier nor userIdentifier is missing", () => {
+    const res = createScheduledMessageSchema.safeParse({ text: "hello", sendAt: 1784620000000 });
     expect(res.success).toBe(false);
   });
 
-  it("fails when providing multiple destination targets", () => {
+  it("rejects when both channelIdentifier and userIdentifier are provided", () => {
+    const res = createScheduledMessageSchema.safeParse({ channelIdentifier: "general", userIdentifier: "usr1", text: "hello", sendAt: 1784620000000 });
+    expect(res.success).toBe(false);
+  });
+
+  it("rejects when text is missing", () => {
+    const res = createScheduledMessageSchema.safeParse({ channelIdentifier: "general", sendAt: 1784620000000 });
+    expect(res.success).toBe(false);
+  });
+
+  it("rejects when sendAt is missing", () => {
+    const res = createScheduledMessageSchema.safeParse({ channelIdentifier: "general", text: "hello" });
+    expect(res.success).toBe(false);
+  });
+
+  it("accepts valid input with channelIdentifier", () => {
     const res = createScheduledMessageSchema.safeParse({
       channelIdentifier: "general",
-      channelIdentifier: "6a5a28d83130c76707112bc8",
-      text: "Multiple targets",
+      text: "hello",
       sendAt: 1784620000000,
     });
-    expect(res.success).toBe(false);
+    expect(res.success).toBe(true);
+  });
+
+  it("accepts valid input with userIdentifier for DM", () => {
+    const res = createScheduledMessageSchema.safeParse({
+      userIdentifier: "nouman@example.com",
+      text: "hello",
+      sendAt: 1784620000000,
+    });
+    expect(res.success).toBe(true);
   });
 });
 
@@ -67,44 +51,64 @@ describe("createScheduledMessage", () => {
     delete process.env.PUMBLE_API_KEY;
   });
 
-  it("resolves channel name and calls POST /createScheduledMessage", async () => {
-    const fetchMock = vi.fn().mockImplementation(async (url) => {
-      const urlStr = url.toString();
-      if (urlStr.includes("/listChannels")) {
-        return {
-          ok: true,
-          text: async () =>
-            JSON.stringify([{ channel: { id: "chan-general", name: "general", channelType: "PUBLIC" } }]),
-        };
-      }
-      if (urlStr.includes("/createScheduledMessage")) {
-        return {
-          ok: true,
-          text: async () => JSON.stringify({ id: "sch123", channelIdentifier: "chan-general" }),
-        };
-      }
-      return { ok: false, text: async () => "Not found" };
+  it("resolves channel name and calls API successfully", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "general" } }]) });
+      return Promise.resolve({ ok: true, text: async () => JSON.stringify({ success: true, message: { id: "sched1" } }) });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = createScheduledMessageSchema.parse({
       channelIdentifier: "general",
-      text: "Test scheduler",
+      text: "hello",
       sendAt: 1784620000000,
     });
     const result = await createScheduledMessage(input);
 
-    expect(result).toEqual({ id: "sch123", channelId: "chan-general" });
+    expect(result).toEqual({ success: true, message: { id: "sched1" } });
+    
+    const apiCall = fetchMock.mock.calls.find((c: any) => c[0].toString().includes("createScheduledMessage"));
+    const body = JSON.parse(apiCall[1].body);
+    expect(body.channelId).toBe("chan1");
+    expect(body.text).toBe("hello");
+    expect(body.sendAt).toBe(1784620000000);
+  });
 
-    const createCall = fetchMock.mock.calls.find((call) =>
-      call[0].toString().includes("/createScheduledMessage")
-    );
-    expect(createCall).toBeDefined();
-    expect(JSON.parse(createCall![1].body)).toEqual({
-      text: "Test scheduler",
-      sendAt: 1784620000000,
-      channelId: "chan-general",
+  it("resolves userIdentifier if provided", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan-dm", channelType: "DIRECT" }, users: ["usr1"] }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", email: "nouman@example.com" }]) });
+      return Promise.resolve({ ok: true, text: async () => JSON.stringify({ success: true }) });
     });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = createScheduledMessageSchema.parse({
+      userIdentifier: "nouman@example.com",
+      text: "hello",
+      sendAt: 1784620000000,
+    });
+    await createScheduledMessage(input);
+
+    const apiCall = fetchMock.mock.calls.find((c: any) => c[0].toString().includes("createScheduledMessage"));
+    const body = JSON.parse(apiCall[1].body);
+    expect(body.channelId).toBe("chan-dm");
+  });
+
+  it("throws if channel not found", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "general" } }]) });
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = createScheduledMessageSchema.parse({
+      channelIdentifier: "nonexistent",
+      text: "hello",
+      sendAt: 1784620000000,
+    });
+    await expect(createScheduledMessage(input)).rejects.toThrow(/Channel with name 'nonexistent' could not be found/);
   });
 });
-

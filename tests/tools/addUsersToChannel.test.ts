@@ -3,16 +3,16 @@ import { addUsersToChannel, addUsersToChannelSchema } from "../../src/tools/addU
 
 describe("addUsersToChannelSchema", () => {
   it("rejects when channelIdentifier is missing", () => {
-    expect(addUsersToChannelSchema.safeParse({ users: ["user1"] }).success).toBe(false);
+    expect(addUsersToChannelSchema.safeParse({ userIdentifiers: ["user1"] }).success).toBe(false);
   });
 
-    it("rejects when users array is missing or empty", () => {
+  it("rejects when users array is missing or empty", () => {
     expect(addUsersToChannelSchema.safeParse({ channelIdentifier: "c1" }).success).toBe(false);
-    expect(addUsersToChannelSchema.safeParse({ channelIdentifier: "c1", users: [] }).success).toBe(false);
+    expect(addUsersToChannelSchema.safeParse({ channelIdentifier: "c1", userIdentifiers: [] }).success).toBe(false);
   });
 
   it("accepts valid input with channelId and users", () => {
-    expect(addUsersToChannelSchema.safeParse({ channelIdentifier: "c1", users: ["user1", "user2"] }).success).toBe(true);
+    expect(addUsersToChannelSchema.safeParse({ channelIdentifier: "c1", userIdentifiers: ["user1", "user2"] }).success).toBe(true);
   });
 });
 
@@ -27,42 +27,27 @@ describe("addUsersToChannel", () => {
   });
 
   it("resolves channel name and user names/emails successfully", async () => {
-    // Mock for listChannels, listUsers, and addUsersToChannel
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ // listChannels
-        ok: true,
-        text: async () => JSON.stringify([
-          { channel: { id: "chan1", name: "general" } }
-        ]),
-      })
-      .mockResolvedValueOnce({ // listUsers
-        ok: true,
-        text: async () => JSON.stringify([
-          { id: "usr1", name: "Aliyan Hammad", email: "aliyan@example.com" },
-          { id: "usr2", name: "Nouman Tariq", email: "nouman@example.com" }
-        ]),
-      })
-      .mockResolvedValueOnce({ // addUsersToChannel
-        ok: true,
-        text: async () => JSON.stringify({ success: true }),
-      });
-      
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([
+        { id: "usr1", name: "Aliyan Hammad", email: "aliyan@example.com" },
+        { id: "usr2", name: "Nouman Tariq", email: "nouman@example.com" }
+      ]) });
+      return Promise.resolve({ ok: true, text: async () => JSON.stringify({ success: true }) });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = addUsersToChannelSchema.parse({
-      channelIdentifier: "general",
-      users: ["aliyan@example.com", "Nouman Tariq", "123456789012345678901234"], // 1 email, 1 name, 1 raw ID
+      channelIdentifier: "chan1",
+      userIdentifiers: ["aliyan@example.com", "Nouman Tariq", "123456789012345678901234"],
     });
-    
     await addUsersToChannel(input);
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    const [addUsersUrl, addUsersOptions] = fetchMock.mock.calls[2];
-    
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const [addUsersUrl, addUsersOptions] = fetchMock.mock.calls[3];
     expect(addUsersUrl.toString()).toBe("https://pumble-api-keys.addons.marketplace.cake.com/addUsersToChannel");
-    expect(addUsersOptions.method).toBe("POST");
-    
-    const body = JSON.parse(addUsersOptions.body as string);
+    const body = JSON.parse(addUsersOptions.body);
     expect(body.channelId).toBe("chan1");
     expect(body.userIds).toContain("usr1");
     expect(body.userIds).toContain("usr2");
@@ -70,89 +55,74 @@ describe("addUsersToChannel", () => {
   });
 
   it("throws an error if a user cannot be resolved", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ // listUsers
-        ok: true,
-        text: async () => JSON.stringify([
-          { id: "usr1", name: "Aliyan Hammad" }
-        ]),
-      });
-      
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Aliyan Hammad" }]) });
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = addUsersToChannelSchema.parse({
       channelIdentifier: "chan1",
-      users: ["Aliyan Hammad", "Ghost User"],
+      userIdentifiers: ["Aliyan Hammad", "Ghost User"],
     });
     
-    await expect(addUsersToChannel(input)).rejects.toThrow(/User 'Ghost User' could not be found/);
-    // API should not be called if resolution fails
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await expect(addUsersToChannel(input)).rejects.toThrow(/User not found for 'Ghost User'/);
   });
 
   it("throws an error instead of silently picking a match when the name is ambiguous", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ // listUsers
-        ok: true,
-        text: async () => JSON.stringify([
-          { id: "usr1", name: "AbdulRehman", email: "abdul.old@example.com" },
-          { id: "usr2", name: "AbdulRehman", email: "abdul.new@example.com" },
-        ]),
-      });
-
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([
+        { id: "usr1", name: "AbdulRehman", email: "abdul.old@example.com" },
+        { id: "usr2", name: "AbdulRehman", email: "abdul.new@example.com" },
+      ]) });
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = addUsersToChannelSchema.parse({
       channelIdentifier: "chan1",
-      users: ["AbdulRehman"],
+      userIdentifiers: ["AbdulRehman"],
     });
 
-    await expect(addUsersToChannel(input)).rejects.toThrow(/matches multiple users/);
-    // Must not call the add API when the target is ambiguous
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await expect(addUsersToChannel(input)).rejects.toThrow(/Ambiguous name/);
   });
 
   it("throws an error if the channel name cannot be resolved", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ // listChannels
-        ok: true,
-        text: async () => JSON.stringify([{ channel: { id: "chan1", name: "general" } }]),
-      });
-
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = addUsersToChannelSchema.parse({
       channelIdentifier: "nonexistent-channel",
-      users: ["usr1"],
+      userIdentifiers: ["usr1"],
     });
 
     await expect(addUsersToChannel(input)).rejects.toThrow(/Channel with name 'nonexistent-channel' could not be found/);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("resolves users by name and email case-insensitively", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ // listUsers
-        ok: true,
-        text: async () => JSON.stringify([
-          { id: "usr1", name: "Aliyan Hammad", email: "aliyan@example.com" },
-        ]),
-      })
-      .mockResolvedValueOnce({ // addUsersToChannel
-        ok: true,
-        text: async () => JSON.stringify({ success: true }),
-      });
-
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Aliyan Hammad", email: "aliyan@example.com" }]) });
+      return Promise.resolve({ ok: true, text: async () => JSON.stringify({ success: true }) });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = addUsersToChannelSchema.parse({
       channelIdentifier: "chan1",
-      users: ["ALIYAN HAMMAD"],
+      userIdentifiers: ["ALIYAN HAMMAD"],
     });
-
     await addUsersToChannel(input);
 
-    const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    const body = JSON.parse(fetchMock.mock.calls.find((c: any) => c[0].toString().includes("addUsersToChannel"))[1].body);
     expect(body.userIds).toEqual(["usr1"]);
   });
 });

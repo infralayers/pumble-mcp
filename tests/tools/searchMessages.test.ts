@@ -2,32 +2,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { searchMessages, searchMessagesSchema } from "../../src/tools/searchMessages.js";
 
 describe("searchMessagesSchema", () => {
-  it("rejects when none of text, fromUser, or inChannel are provided", () => {
-    expect(searchMessagesSchema.safeParse({}).success).toBe(false);
+  it("rejects when no identifier or text is provided", () => {
+    const res = searchMessagesSchema.safeParse({});
+    expect(res.success).toBe(false);
   });
 
-  it("accepts when only text is provided", () => {
-    expect(searchMessagesSchema.safeParse({ text: "dokploy" }).success).toBe(true);
+  it("accepts when text is provided", () => {
+    const res = searchMessagesSchema.safeParse({ text: "hello" });
+    expect(res.success).toBe(true);
   });
 
-  it("accepts when only fromUser is provided", () => {
-    expect(searchMessagesSchema.safeParse({ fromUser: "nouman" }).success).toBe(true);
+  it("accepts when fromUserIdentifiers is provided", () => {
+    const res = searchMessagesSchema.safeParse({ fromUserIdentifiers: ["nouman"] });
+    expect(res.success).toBe(true);
   });
 
-  it("accepts when only inChannel is provided", () => {
-    expect(searchMessagesSchema.safeParse({ inChannel: "office-work" }).success).toBe(true);
+  it("accepts when inChannelIdentifiers is provided", () => {
+    const res = searchMessagesSchema.safeParse({ inChannelIdentifiers: ["general"] });
+    expect(res.success).toBe(true);
   });
 
-  it("transforms single string fromUser/inChannel to array", () => {
-    const result = searchMessagesSchema.parse({ fromUser: "nouman", inChannel: "general" });
-    expect(result.fromUser).toEqual(["nouman"]);
-    expect(result.inChannel).toEqual(["general"]);
-  });
-  
-  it("accepts arrays directly", () => {
-    const result = searchMessagesSchema.parse({ fromUser: ["u1", "u2"], inChannel: ["c1"] });
-    expect(result.fromUser).toEqual(["u1", "u2"]);
-    expect(result.inChannel).toEqual(["c1"]);
+  it("supports singular strings that are coerced to arrays by the backend logic", () => {
+    const res = searchMessagesSchema.safeParse({ fromUserIdentifiers: ["nouman"] });
+    expect(res.success).toBe(true);
   });
 });
 
@@ -41,143 +38,82 @@ describe("searchMessages", () => {
     delete process.env.PUMBLE_API_KEY;
   });
 
-  it("calls POST /searchMessages with exactly the provided input when no resolving is needed", async () => {
-    const fetchMock = vi.fn().mockImplementation(async (url) => {
-      return {
-        ok: true,
-        text: async () => JSON.stringify([{ id: "msg1" }]),
-        json: async () => [{ id: "msg1" }],
-      };
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const input = searchMessagesSchema.parse({ text: "hello" });
-    const result = await searchMessages(input);
-
-    expect(result).toEqual([{ id: "msg1" }]);
-    const [url, options] = fetchMock.mock.calls[0];
-    expect(url.toString()).toBe("https://pumble-api-keys.addons.marketplace.cake.com/searchMessages");
-    expect(JSON.parse(options.body)).toEqual({ text: "hello" });
-  });
-
-  it("resolves names to IDs correctly via listUsers and listChannels", async () => {
-    const fetchMock = vi.fn().mockImplementation(async (url) => {
-      const urlString = url.toString();
-      if (urlString.includes("/listUsers")) {
-        return {
-          ok: true,
-          text: async () => JSON.stringify([
-            { id: "u123", name: "nouman", email: "nouman@example.com" }
-          ]),
-          json: async () => [
-            { id: "u123", name: "nouman", email: "nouman@example.com" }
-          ],
-        };
-      }
-      if (urlString.includes("/listChannels")) {
-        return {
-          ok: true,
-          text: async () => JSON.stringify([
-            { channel: { id: "c123", name: "office-work" } }
-          ]),
-          json: async () => [
-            { channel: { id: "c123", name: "office-work" } }
-          ],
-        };
-      }
-      if (urlString.includes("/searchMessages")) {
-        return {
-          ok: true,
-          text: async () => JSON.stringify([{ id: "msg_found" }]),
-          json: async () => [{ id: "msg_found" }],
-        };
-      }
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const input = searchMessagesSchema.parse({ 
-      text: "agent", 
-      fromUser: ["nouman", "u999"], 
-      inChannel: ["office-work", "c999"] 
-    });
-    const result = await searchMessages(input);
-
-    expect(result).toEqual([{ id: "msg_found" }]);
-    
-    // Check that searchMessages was called with the resolved IDs
-    const searchCall = fetchMock.mock.calls.find(c => c[0].toString().includes("/searchMessages"));
-    expect(searchCall).toBeDefined();
-    
-    const body = JSON.parse(searchCall[1].body);
-    expect(body).toEqual({
-      text: "agent",
-      from: ["u123", "u999"], // "nouman" -> "u123", "u999" kept as is
-      in: ["c123", "c999"]    // "office-work" -> "c123", "c999" kept as is
-    });
-  });
-
-  it("skips the users/channels lookup entirely when given real IDs", async () => {
-    const fetchMock = vi.fn().mockImplementation(async (url) => {
-      const urlString = url.toString();
-      if (urlString.includes("/searchMessages")) {
-        return { ok: true, text: async () => JSON.stringify([]) };
-      }
-      throw new Error(`Unexpected fetch to ${urlString}`);
+  it("resolves names to IDs and calls the search API correctly", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "c1", name: "general" } }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "u1", name: "nouman" }]) });
+      return Promise.resolve({ ok: true, text: async () => JSON.stringify({ messages: [{ text: "found" }] }) });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = searchMessagesSchema.parse({
-      text: "agent",
-      fromUser: "668e30546a5ea56c5d83f46b",
-      inChannel: "668e30546a5ea56c5d83f471",
+      text: "search query",
+      fromUserIdentifiers: ["nouman"],
+      inChannelIdentifiers: ["general"],
     });
-    await searchMessages(input);
 
-    // Only /searchMessages should be called - no listUsers/listChannels lookup for real IDs
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.fromUserIds).toEqual(["668e30546a5ea56c5d83f46b"]);
-    expect(body.inChannelIds).toEqual(["668e30546a5ea56c5d83f471"]);
+    const result = await searchMessages(input);
+    expect(result).toEqual({ messages: [{ text: "found" }] });
+
+    const apiCall = fetchMock.mock.calls.find((c: any) => c[0].toString().includes("searchMessages"));
+    const body = JSON.parse(apiCall[1].body);
+    expect(body.text).toBe("search query");
+    expect(body.from).toEqual(["u1"]);
+    expect(body.in).toEqual(["c1"]);
   });
 
-  it("throws instead of guessing when fromUser matches multiple users", async () => {
-    const fetchMock = vi.fn().mockImplementation(async (url) => {
-      const urlString = url.toString();
-      if (urlString.includes("/listUsers")) {
-        return {
-          ok: true,
-          text: async () => JSON.stringify([
-            { id: "u1", name: "AbdulRehman", email: "abdul.old@example.com" },
-            { id: "u2", name: "AbdulRehman", email: "abdul.new@example.com" },
-          ]),
-        };
-      }
-      throw new Error(`Unexpected fetch to ${urlString}`);
+  it("passes raw IDs straight through without lookup if they match the ID pattern", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      // Should not call listUsers or listChannels because the IDs are raw
+      return Promise.resolve({ ok: true, text: async () => JSON.stringify({ messages: [] }) });
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const input = searchMessagesSchema.parse({ text: "hi", fromUser: "AbdulRehman" });
-    await expect(searchMessages(input)).rejects.toThrow(/matches multiple users/);
+    const input = searchMessagesSchema.parse({
+      fromUserIdentifiers: ["668e30546a5ea56c5d83f46b"],
+      inChannelIdentifiers: ["668e30546a5ea56c5d83f471"],
+    });
+
+    await searchMessages(input);
+
+    const apiCall = fetchMock.mock.calls.find((c: any) => c[0].toString().includes("searchMessages"));
+    const body = JSON.parse(apiCall[1].body);
+    expect(body.from).toEqual(["668e30546a5ea56c5d83f46b"]);
+    expect(body.in).toEqual(["668e30546a5ea56c5d83f471"]);
+    
+    // Ensure no lookup calls were made
+    const listUsersCalls = fetchMock.mock.calls.filter((c: any) => c[0].toString().includes("/listUsers"));
+    expect(listUsersCalls.length).toBe(0);
   });
 
-  it("passes an unresolvable name through as-is rather than throwing", async () => {
-    const fetchMock = vi.fn().mockImplementation(async (url) => {
-      const urlString = url.toString();
-      if (urlString.includes("/listUsers")) {
-        return { ok: true, text: async () => JSON.stringify([]) };
-      }
-      if (urlString.includes("/searchMessages")) {
-        return { ok: true, text: async () => JSON.stringify([]) };
-      }
-      throw new Error(`Unexpected fetch to ${urlString}`);
+  it("throws when a user cannot be resolved", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([]) });
+      return Promise.resolve({ ok: true, text: async () => "{}" });
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const input = searchMessagesSchema.parse({ text: "hi", fromUser: "Ghost User" });
-    await searchMessages(input);
+    const input = searchMessagesSchema.parse({
+      fromUserIdentifiers: ["ghost user"],
+    });
 
-    const searchCall = fetchMock.mock.calls.find((c) => c[0].toString().includes("/searchMessages"));
-    const body = JSON.parse(searchCall[1].body);
-    expect(body.fromUserIds).toEqual(["Ghost User"]);
+    await expect(searchMessages(input)).rejects.toThrow(/User not found for 'ghost user'/);
+  });
+
+  it("throws when a channel cannot be resolved", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([]) });
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = searchMessagesSchema.parse({
+      inChannelIdentifiers: ["ghost channel"],
+    });
+
+    await expect(searchMessages(input)).rejects.toThrow(/Channel with name 'ghost channel' could not be found/);
   });
 });

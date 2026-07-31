@@ -58,7 +58,7 @@ describe("sendGroupDm", () => {
     expect(dmCall[1].method).toBe("POST");
     expect(JSON.parse(dmCall[1].body as string)).toEqual({
       text: "Hello",
-      userIdentifiers: ["u4", "u1"],
+      userIds: ["u4", "u1"],
     });
   });
 
@@ -70,7 +70,7 @@ describe("sendGroupDm", () => {
     expect(dmCall).toBeDefined();
     expect(JSON.parse(dmCall[1].body as string)).toEqual({
       text: "Hello",
-      userIdentifiers: ["u1", "u3"]
+      userIds: ["u1", "u3"]
     });
   });
 
@@ -82,7 +82,7 @@ describe("sendGroupDm", () => {
     expect(dmCall).toBeDefined();
     expect(JSON.parse(dmCall[1].body as string)).toEqual({
       text: "Hello",
-      userIdentifiers: ["u3", "u1"]
+      userIds: ["u3", "u1"]
     });
   });
 
@@ -94,7 +94,7 @@ describe("sendGroupDm", () => {
     expect(dmCall).toBeDefined();
     expect(JSON.parse(dmCall[1].body as string)).toEqual({
       text: "Hello",
-      userIdentifiers: ["u3", "u1"]
+      userIds: ["u3", "u1"]
     });
   });
 

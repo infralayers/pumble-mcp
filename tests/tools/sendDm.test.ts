@@ -25,7 +25,7 @@ describe("sendDm", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const input = sendDmSchema.parse({ userId: "u1", text: "hey there" });
+    const input = sendDmSchema.parse({ userIdentifier: "u1", text: "hey there" });
     const result = await sendDm(input);
 
     expect(result).toEqual({ id: "dm1" });

@@ -31,6 +31,6 @@ describe("replyMessage", () => {
     expect(result).toEqual({ id: "reply1" });
     const [url, options] = fetchMock.mock.calls[0];
     expect(url.toString()).toBe("https://pumble-api-keys.addons.marketplace.cake.com/sendReply");
-    expect(JSON.parse(options.body)).toEqual({ messageId: "msg1", channelId: "abc", text: "hello", asBot: false });
+    expect(JSON.parse(options.body)).toEqual({ messageId: "msg1", channelId: "c1", text: "hello", asBot: false });
   });
 });
