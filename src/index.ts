@@ -5,6 +5,7 @@ import { listMessages, listMessagesSchema, listMessagesShape } from "./tools/lis
 import { editMessage, editMessageShape } from "./tools/editMessage.js";
 import { listChannels } from "./tools/listChannels.js";
 import { sendDm, sendDmSchema, sendDmShape } from "./tools/sendDm.js";
+import { sendGroupDm, sendGroupDmSchema, sendGroupDmShape } from "./tools/sendGroupDm.js";
 import { listUsers } from "./tools/listUsers.js";
 import { getChannel, getChannelSchema, getChannelShape } from "./tools/getChannel.js";
 import { createChannel, createChannelSchema, createChannelShape } from "./tools/createChannel.js";
@@ -93,10 +94,23 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_list_users",
+  "pumble_send_group_dm",
   {
     description:
-      "List all people in the Pumble workspace (id, name, email). Use this to resolve a person's userId for pumble_send_dm, or find their DM channelId via pumble_list_channels (channelType DIRECT) to read a conversation with pumble_list_messages.",
+      "Send a direct message to a group of users in Pumble. CRITICAL RULE: You MUST NEVER infer, guess, or hallucinate missing information (such as the message text or recipients). If ANY required information is missing or unclear, you MUST STOP and ask the human explicitly. DO NOT attempt to fill in the blanks yourself. Provide exactly what the human asked.",
+    inputSchema: sendGroupDmShape,
+  },
+  async (args) => {
+    const input = sendGroupDmSchema.parse(args);
+    const result = await sendGroupDm(input);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_list_users",
+  {
+    description: "List all users in the workspace to retrieve their userIds, emails, and names.",
     inputSchema: {},
   },
   async () => {
