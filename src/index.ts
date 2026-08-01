@@ -19,7 +19,6 @@ import { listScheduledMessages, listScheduledMessagesSchema, listScheduledMessag
 import { createScheduledMessage, createScheduledMessageSchema, createScheduledMessageShape } from "./tools/createScheduledMessage.js";
 import { editScheduledMessage, editScheduledMessageSchema, editScheduledMessageShape } from "./tools/editScheduledMessage.js";
 import { deleteScheduledMessage, deleteScheduledMessageSchema, deleteScheduledMessageShape } from "./tools/deleteScheduledMessage.js";
-import { getScheduledMessage, getScheduledMessageSchema, getScheduledMessageShape } from "./tools/getScheduledMessage.js";
 
 if (!process.env.PUMBLE_API_KEY) {
   console.error("PUMBLE_API_KEY environment variable is not set");
@@ -272,19 +271,6 @@ server.registerTool(
     const input = deleteScheduledMessageSchema.parse(args);
     const result = await deleteScheduledMessage(input);
     return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
-  },
-);
-
-server.registerTool(
-  "pumble_get_scheduled_message",
-  {
-    description: "Fetch a specific scheduled message's details by ID.",
-    inputSchema: getScheduledMessageShape,
-  },
-  async (args) => {
-    const input = getScheduledMessageSchema.parse(args);
-    const result = await getScheduledMessage(input);
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
   },
 );
 
