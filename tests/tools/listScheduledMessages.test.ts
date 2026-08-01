@@ -13,12 +13,12 @@ describe("listScheduledMessagesSchema", () => {
   });
 
   it("accepts userIdentifier", () => {
-    const res = listScheduledMessagesSchema.safeParse({ userIdentifier: "nouman" });
+    const res = listScheduledMessagesSchema.safeParse({ userIdentifier: "sam" });
     expect(res.success).toBe(true);
   });
 
   it("rejects when both channelIdentifier and userIdentifier are provided", () => {
-    const res = listScheduledMessagesSchema.safeParse({ channelIdentifier: "general", userIdentifier: "nouman" });
+    const res = listScheduledMessagesSchema.safeParse({ channelIdentifier: "general", userIdentifier: "sam" });
     expect(res.success).toBe(false);
   });
 });
@@ -63,12 +63,12 @@ describe("listScheduledMessages", () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan-dm", channelType: "DIRECT" }, users: ["u1"] }]) });
-      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "u1", name: "nouman" }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "u1", name: "sam" }]) });
       return Promise.resolve({ ok: true, text: async () => JSON.stringify({ messages: [] }) });
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const input = listScheduledMessagesSchema.parse({ userIdentifier: "nouman" });
+    const input = listScheduledMessagesSchema.parse({ userIdentifier: "sam" });
     await listScheduledMessages(input);
 
     const apiCall = fetchMock.mock.calls.find((c: any) => c[0].toString().includes("fetchScheduledMessages"));

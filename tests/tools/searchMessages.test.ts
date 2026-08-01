@@ -13,7 +13,7 @@ describe("searchMessagesSchema", () => {
   });
 
   it("accepts when fromUserIdentifiers is provided", () => {
-    const res = searchMessagesSchema.safeParse({ fromUserIdentifiers: ["nouman"] });
+    const res = searchMessagesSchema.safeParse({ fromUserIdentifiers: ["sam"] });
     expect(res.success).toBe(true);
   });
 
@@ -23,7 +23,7 @@ describe("searchMessagesSchema", () => {
   });
 
   it("supports singular strings that are coerced to arrays by the backend logic", () => {
-    const res = searchMessagesSchema.safeParse({ fromUserIdentifiers: ["nouman"] });
+    const res = searchMessagesSchema.safeParse({ fromUserIdentifiers: ["sam"] });
     expect(res.success).toBe(true);
   });
 });
@@ -42,14 +42,14 @@ describe("searchMessages", () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "c1", name: "general" } }]) });
-      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "u1", name: "nouman" }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "u1", name: "sam" }]) });
       return Promise.resolve({ ok: true, text: async () => JSON.stringify({ messages: [{ text: "found" }] }) });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = searchMessagesSchema.parse({
       text: "search query",
-      fromUserIdentifiers: ["nouman"],
+      fromUserIdentifiers: ["sam"],
       inChannelIdentifiers: ["general"],
     });
 
@@ -71,7 +71,7 @@ describe("searchMessages", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const input = searchMessagesSchema.parse({
-      fromUserIdentifiers: ["668e30546a5ea56c5d83f46b"],
+      fromUserIdentifiers: ["507f1f77bcf86cd799439011"],
       inChannelIdentifiers: ["668e30546a5ea56c5d83f471"],
     });
 
@@ -79,7 +79,7 @@ describe("searchMessages", () => {
 
     const apiCall = fetchMock.mock.calls.find((c: any) => c[0].toString().includes("searchMessages"));
     const body = JSON.parse(apiCall[1].body);
-    expect(body.from).toEqual(["668e30546a5ea56c5d83f46b"]);
+    expect(body.from).toEqual(["507f1f77bcf86cd799439011"]);
     expect(body.in).toEqual(["668e30546a5ea56c5d83f471"]);
     
     // Ensure no lookup calls were made

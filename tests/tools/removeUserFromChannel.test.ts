@@ -34,14 +34,14 @@ describe("removeUserFromChannel", () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
-      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Aliyan Hammad" }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Jordan Blake" }]) });
       return Promise.resolve({ ok: true, text: async () => JSON.stringify({ success: true }) });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = removeUserFromChannelSchema.parse({
       channelIdentifier: "chan1",
-      userIdentifier: "Aliyan Hammad",
+      userIdentifier: "Jordan Blake",
       confirm: true
     });
     
@@ -74,8 +74,8 @@ describe("removeUserFromChannel", () => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
       if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([
-        { id: "usr1", name: "AbdulRehman", email: "abdul.old@example.com" },
-        { id: "usr2", name: "AbdulRehman", email: "abdul.new@example.com" },
+        { id: "usr1", name: "Casey Morgan", email: "casey.old@example.com" },
+        { id: "usr2", name: "Casey Morgan", email: "casey.new@example.com" },
       ]) });
       return Promise.resolve({ ok: true, text: async () => "{}" });
     });
@@ -83,10 +83,10 @@ describe("removeUserFromChannel", () => {
 
     const input = removeUserFromChannelSchema.parse({
       channelIdentifier: "chan1",
-      userIdentifier: "AbdulRehman",
+      userIdentifier: "Casey Morgan",
       confirm: true,
     });
-    await expect(removeUserFromChannel(input)).rejects.toThrow(/Ambiguous name 'AbdulRehman'/);
+    await expect(removeUserFromChannel(input)).rejects.toThrow(/Ambiguous name 'Casey Morgan'/);
   });
 
   it("throws an error if the channel name cannot be resolved", async () => {
@@ -109,14 +109,14 @@ describe("removeUserFromChannel", () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
-      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Aliyan Hammad" }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Jordan Blake" }]) });
       return Promise.resolve({ ok: true, text: async () => JSON.stringify({ success: true }) });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = removeUserFromChannelSchema.parse({
       channelIdentifier: "chan1",
-      userIdentifier: "ALIYAN HAMMAD",
+      userIdentifier: "JORDAN BLAKE",
       confirm: true,
     });
     await removeUserFromChannel(input);

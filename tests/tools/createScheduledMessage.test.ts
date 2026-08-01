@@ -33,7 +33,7 @@ describe("createScheduledMessageSchema", () => {
 
   it("accepts valid input with userIdentifier for DM", () => {
     const res = createScheduledMessageSchema.safeParse({
-      userIdentifier: "nouman@example.com",
+      userIdentifier: "sam@example.com",
       text: "hello",
       sendAt: 1784620000000,
     });
@@ -79,13 +79,13 @@ describe("createScheduledMessage", () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan-dm", channelType: "DIRECT" }, users: ["usr1"] }]) });
-      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", email: "nouman@example.com" }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", email: "sam@example.com" }]) });
       return Promise.resolve({ ok: true, text: async () => JSON.stringify({ success: true }) });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = createScheduledMessageSchema.parse({
-      userIdentifier: "nouman@example.com",
+      userIdentifier: "sam@example.com",
       text: "hello",
       sendAt: 1784620000000,
     });

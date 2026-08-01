@@ -31,8 +31,8 @@ describe("addUsersToChannel", () => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
       if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([
-        { id: "usr1", name: "Aliyan Hammad", email: "aliyan@example.com" },
-        { id: "usr2", name: "Nouman Tariq", email: "nouman@example.com" }
+        { id: "usr1", name: "Jordan Blake", email: "jordan@example.com" },
+        { id: "usr2", name: "Sam Rivera", email: "sam@example.com" }
       ]) });
       return Promise.resolve({ ok: true, text: async () => JSON.stringify({ success: true }) });
     });
@@ -40,7 +40,7 @@ describe("addUsersToChannel", () => {
 
     const input = addUsersToChannelSchema.parse({
       channelIdentifier: "chan1",
-      userIdentifiers: ["aliyan@example.com", "Nouman Tariq", "123456789012345678901234"],
+      userIdentifiers: ["jordan@example.com", "Sam Rivera", "123456789012345678901234"], // 1 email, 1 name, 1 raw ID
     });
     await addUsersToChannel(input);
 
@@ -58,14 +58,14 @@ describe("addUsersToChannel", () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
-      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Aliyan Hammad" }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Jordan Blake" }]) });
       return Promise.resolve({ ok: true, text: async () => "{}" });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = addUsersToChannelSchema.parse({
       channelIdentifier: "chan1",
-      userIdentifiers: ["Aliyan Hammad", "Ghost User"],
+      userIdentifiers: ["Jordan Blake", "Ghost User"],
     });
     
     await expect(addUsersToChannel(input)).rejects.toThrow(/User not found for 'Ghost User'/);
@@ -76,8 +76,8 @@ describe("addUsersToChannel", () => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
       if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([
-        { id: "usr1", name: "AbdulRehman", email: "abdul.old@example.com" },
-        { id: "usr2", name: "AbdulRehman", email: "abdul.new@example.com" },
+        { id: "usr1", name: "Casey Morgan", email: "casey.old@example.com" },
+        { id: "usr2", name: "Casey Morgan", email: "casey.new@example.com" },
       ]) });
       return Promise.resolve({ ok: true, text: async () => "{}" });
     });
@@ -85,7 +85,7 @@ describe("addUsersToChannel", () => {
 
     const input = addUsersToChannelSchema.parse({
       channelIdentifier: "chan1",
-      userIdentifiers: ["AbdulRehman"],
+      userIdentifiers: ["Casey Morgan"],
     });
 
     await expect(addUsersToChannel(input)).rejects.toThrow(/Ambiguous name/);
@@ -111,14 +111,14 @@ describe("addUsersToChannel", () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
-      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Aliyan Hammad", email: "aliyan@example.com" }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Jordan Blake", email: "jordan@example.com" }]) });
       return Promise.resolve({ ok: true, text: async () => JSON.stringify({ success: true }) });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = addUsersToChannelSchema.parse({
       channelIdentifier: "chan1",
-      userIdentifiers: ["ALIYAN HAMMAD"],
+      userIdentifiers: ["JORDAN BLAKE"],
     });
     await addUsersToChannel(input);
 
