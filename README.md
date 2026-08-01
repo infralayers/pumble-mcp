@@ -1,9 +1,9 @@
 # pumble-mcp
 
 A small MCP server that wraps Pumble's "API Key addon" REST API, exposing
-fifteen tools to any MCP client, covering messages and threads, reactions, search,
-channel and membership management, direct messages, and the workspace user
-directory. See `SPEC.md` for the full design.
+nineteen tools to any MCP client, covering messages and threads, scheduled
+messages, reactions, search, channel and membership management, direct messages,
+and the workspace user directory. See `SPEC.md` for the full design.
 
 > **Security note:** the Pumble API key you configure grants broad,
 > workspace-wide access. Read the [Security / Permissions](#security--permissions)
@@ -58,7 +58,7 @@ Claude Code can write that entry for you. Run this from the project root so
 claude mcp add pumble --env PUMBLE_API_KEY="$PUMBLE_API_KEY" -- node "$(pwd)/dist/index.js"
 ```
 
-Once registered, all fifteen tools are available in future sessions. Verify
+Once registered, all nineteen tools are available in future sessions. Verify
 with:
 
 ```bash
@@ -93,6 +93,26 @@ Thread paging is inclusive: `cursor` names the reply to resume from and that
 reply comes back again, so `cursor` plus `limit: N` returns **N + 1** items.
 The response carries no `hasMore` flag; a short page means the end.
 
+### Scheduled messages
+
+| Tool | Pumble endpoint | Notes |
+|---|---|---|
+| `pumble_create_scheduled_message` | `POST /createScheduledMessage` | `channel`, `channelId`, `userId`, or `email` (exactly one), `text`, `sendAt` (ISO string or epoch ms) |
+| `pumble_list_scheduled_messages` | `GET /fetchScheduledMessages` | Optional `channel`/`channelId`/`userId`/`email` (at most one), `cursor`, `limit`; returns `{ scheduledMessages, hasMore }` |
+| `pumble_edit_scheduled_message` | `POST /editScheduledMessage` | `scheduledMessageId` plus any of `text`, `sendAt`, or a new destination — a scheduled message can be moved to another channel |
+| `pumble_delete_scheduled_message` | `DELETE /deleteScheduledMessage` | `scheduledMessageId` and `confirm: true` — **destructive, the confirmation is mandatory** |
+
+Naming a destination by anything other than `channelId` costs an extra lookup:
+these endpoints only accept `channelId`, so channel names, user IDs, and emails
+are resolved first. Targeting a person resolves to the **existing** DM channel
+with them — Pumble creates one only after a first message, so DM someone before
+scheduling to them.
+
+Editing is read-modify-write because Pumble rejects an edit missing any of
+`channelId`, `text`, or `sendAt`; fields you leave out are read back and resent
+unchanged. There is no separate "get" tool — listing already returns whole
+messages.
+
 ### Reactions
 
 | Tool | Pumble endpoint | Notes |
@@ -124,10 +144,13 @@ connected client can call. Understand the blast radius before installing:
 
 - The API key inherits the full visibility and privileges of the Pumble user
   who generated it. It is a **password-equivalent secret**.
-- With these fifteen tools, anyone able to invoke this server (including any
+- With these nineteen tools, anyone able to invoke this server (including any
   model or client session configured with it) can, **as you**:
   - read, send, edit, and reply to messages in **any channel the key can see**,
     including thread replies;
+  - **queue messages to post later** in any channel or DM, and read, rewrite,
+    redirect, or cancel anything already queued — a scheduled message can fire
+    long after the session that created it has ended;
   - **search across the workspace** by text, author, or channel
     (`pumble_search_messages`) — this makes bulk retrieval far easier than
     reading channels one at a time;
