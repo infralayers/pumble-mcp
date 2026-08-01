@@ -9,13 +9,13 @@ import {
 
 describe("isLikelyId", () => {
   it("recognizes 24-char hex strings as IDs", () => {
-    expect(isLikelyId("668e30546a5ea56c5d83f46b")).toBe(true);
+    expect(isLikelyId("507f1f77bcf86cd799439011")).toBe(true);
   });
 
   it("rejects names and emails", () => {
     expect(isLikelyId("general")).toBe(false);
     expect(isLikelyId("a@b.com")).toBe(false);
-    expect(isLikelyId("668e30546a5ea56c5d83f46")).toBe(false); // 23 chars
+    expect(isLikelyId("507f1f77bcf86cd79943901")).toBe(false); // 23 chars
   });
 });
 
@@ -24,16 +24,16 @@ describe("matchChannelsByName / matchUsersByNameOrEmail", () => {
     const channels = [{ channel: { id: "c1", name: "General" } }];
     expect(matchChannelsByName("general", channels)).toHaveLength(1);
 
-    const users = [{ id: "u1", name: "Aliyan Hammad", email: "aliyan@example.com" }];
-    expect(matchUsersByNameOrEmail("ALIYAN@EXAMPLE.COM", users)).toHaveLength(1);
+    const users = [{ id: "u1", name: "Jordan Blake", email: "jordan@example.com" }];
+    expect(matchUsersByNameOrEmail("JORDAN@EXAMPLE.COM", users)).toHaveLength(1);
   });
 
   it("returns every match when a name is ambiguous", () => {
     const users = [
-      { id: "u1", name: "AbdulRehman", email: "abdul.old@example.com" },
-      { id: "u2", name: "AbdulRehman", email: "abdul.new@example.com" },
+      { id: "u1", name: "Casey Morgan", email: "casey.old@example.com" },
+      { id: "u2", name: "Casey Morgan", email: "casey.new@example.com" },
     ];
-    expect(matchUsersByNameOrEmail("AbdulRehman", users)).toHaveLength(2);
+    expect(matchUsersByNameOrEmail("Casey Morgan", users)).toHaveLength(2);
   });
 });
 
@@ -51,7 +51,7 @@ describe("resolveChannelId / resolveUserId", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(resolveChannelId("668e30546a5ea56c5d83f46b")).resolves.toBe("668e30546a5ea56c5d83f46b");
+    await expect(resolveChannelId("507f1f77bcf86cd799439011")).resolves.toBe("507f1f77bcf86cd799439011");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -67,13 +67,13 @@ describe("resolveChannelId / resolveUserId", () => {
       ok: true,
       text: async () =>
         JSON.stringify([
-          { id: "u1", name: "AbdulRehman", email: "abdul.old@example.com" },
-          { id: "u2", name: "AbdulRehman", email: "abdul.new@example.com" },
+          { id: "u1", name: "Casey Morgan", email: "casey.old@example.com" },
+          { id: "u2", name: "Casey Morgan", email: "casey.new@example.com" },
         ]),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(resolveUserId("AbdulRehman")).rejects.toThrow(/matches multiple users.*u1.*u2|matches multiple users/);
+    await expect(resolveUserId("Casey Morgan")).rejects.toThrow(/matches multiple users.*u1.*u2|matches multiple users/);
   });
 
   it("resolveChannelId returns the single match's id", async () => {

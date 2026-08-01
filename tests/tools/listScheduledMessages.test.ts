@@ -5,8 +5,8 @@ import { callTo, mockPumble } from "../helpers/mockPumble.js";
 describe("listScheduledMessagesSchema", () => {
   it.each([
     ["channel + channelId", { channel: "general", channelId: "123" }],
-    ["channel + userId", { channel: "general", userId: "668e30546a5ea56c5d83f46b" }],
-    ["userId + email", { userId: "668e30546a5ea56c5d83f46b", email: "a@b.com" }],
+    ["channel + userId", { channel: "general", userId: "507f1f77bcf86cd799439011" }],
+    ["userId + email", { userId: "507f1f77bcf86cd799439011", email: "a@b.com" }],
   ])("rejects more than one filter: %s", (_label, input) => {
     expect(listScheduledMessagesSchema.safeParse(input).success).toBe(false);
   });
@@ -36,17 +36,17 @@ describe("listScheduledMessages", () => {
 
   it("resolves an email to that user's DM channel", async () => {
     const fetchMock = mockPumble({
-      "/listUsers": [{ id: "user-nouman", name: "Nouman", email: "nouman@proton.me" }],
+      "/listUsers": [{ id: "user-sam", name: "Sam", email: "sam@example.com" }],
       "/listChannels": [
         { channel: { id: "chan-self", channelType: "SELF" }, users: ["user-current"] },
-        { channel: { id: "chan-dm-nouman", channelType: "DIRECT" }, users: ["user-nouman", "user-current"] },
+        { channel: { id: "chan-dm-sam", channelType: "DIRECT" }, users: ["user-sam", "user-current"] },
       ],
       "/fetchScheduledMessages": { scheduledMessages: [{ id: "sch2" }] },
     });
 
-    await listScheduledMessages({ email: "nouman@proton.me" });
+    await listScheduledMessages({ email: "sam@example.com" });
 
-    expect(callTo(fetchMock, "/fetchScheduledMessages").url).toContain("channelId=chan-dm-nouman");
+    expect(callTo(fetchMock, "/fetchScheduledMessages").url).toContain("channelId=chan-dm-sam");
   });
 
   it("passes cursor and limit through to the query string", async () => {

@@ -44,8 +44,8 @@ describe("addUsersToChannel", () => {
       .mockResolvedValueOnce({ // listUsers
         ok: true,
         text: async () => JSON.stringify([
-          { id: "usr1", name: "Aliyan Hammad", email: "aliyan@example.com" },
-          { id: "usr2", name: "Nouman Tariq", email: "nouman@example.com" }
+          { id: "usr1", name: "Jordan Blake", email: "jordan@example.com" },
+          { id: "usr2", name: "Sam Rivera", email: "sam@example.com" }
         ]),
       })
       .mockResolvedValueOnce({ // addUsersToChannel
@@ -57,7 +57,7 @@ describe("addUsersToChannel", () => {
 
     const input = addUsersToChannelSchema.parse({
       channel: "general",
-      users: ["aliyan@example.com", "Nouman Tariq", "123456789012345678901234"], // 1 email, 1 name, 1 raw ID
+      users: ["jordan@example.com", "Sam Rivera", "123456789012345678901234"], // 1 email, 1 name, 1 raw ID
     });
     
     await addUsersToChannel(input);
@@ -80,7 +80,7 @@ describe("addUsersToChannel", () => {
       .mockResolvedValueOnce({ // listUsers
         ok: true,
         text: async () => JSON.stringify([
-          { id: "usr1", name: "Aliyan Hammad" }
+          { id: "usr1", name: "Jordan Blake" }
         ]),
       });
       
@@ -88,7 +88,7 @@ describe("addUsersToChannel", () => {
 
     const input = addUsersToChannelSchema.parse({
       channelId: "chan1",
-      users: ["Aliyan Hammad", "Ghost User"],
+      users: ["Jordan Blake", "Ghost User"],
     });
     
     await expect(addUsersToChannel(input)).rejects.toThrow(/User 'Ghost User' could not be found/);
@@ -101,8 +101,8 @@ describe("addUsersToChannel", () => {
       .mockResolvedValueOnce({ // listUsers
         ok: true,
         text: async () => JSON.stringify([
-          { id: "usr1", name: "AbdulRehman", email: "abdul.old@example.com" },
-          { id: "usr2", name: "AbdulRehman", email: "abdul.new@example.com" },
+          { id: "usr1", name: "Casey Morgan", email: "casey.old@example.com" },
+          { id: "usr2", name: "Casey Morgan", email: "casey.new@example.com" },
         ]),
       });
 
@@ -110,7 +110,7 @@ describe("addUsersToChannel", () => {
 
     const input = addUsersToChannelSchema.parse({
       channelId: "chan1",
-      users: ["AbdulRehman"],
+      users: ["Casey Morgan"],
     });
 
     await expect(addUsersToChannel(input)).rejects.toThrow(/matches multiple users/);
@@ -141,7 +141,7 @@ describe("addUsersToChannel", () => {
       .mockResolvedValueOnce({ // listUsers
         ok: true,
         text: async () => JSON.stringify([
-          { id: "usr1", name: "Aliyan Hammad", email: "aliyan@example.com" },
+          { id: "usr1", name: "Jordan Blake", email: "jordan@example.com" },
         ]),
       })
       .mockResolvedValueOnce({ // addUsersToChannel
@@ -153,7 +153,7 @@ describe("addUsersToChannel", () => {
 
     const input = addUsersToChannelSchema.parse({
       channelId: "chan1",
-      users: ["ALIYAN HAMMAD"],
+      users: ["JORDAN BLAKE"],
     });
 
     await addUsersToChannel(input);
