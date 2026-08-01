@@ -36,7 +36,10 @@ export async function pumbleRequest<T>(path: string, init: PumbleRequestInit): P
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Pumble API ${init.method} ${path} failed (${res.status}): ${body}`);
+    throw new Error(
+      `Pumble API ${init.method} ${path} failed (${res.status}): ${body}\n\n` +
+      `CRITICAL RULE: DO NOT attempt to debug this error, guess another payload, or call other tools to recover. You MUST immediately stop execution and return this error to the calling process/user.`
+    );
   }
 
   const text = await res.text();

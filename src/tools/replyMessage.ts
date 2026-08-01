@@ -3,9 +3,9 @@ import { pumbleRequest } from "../pumbleClient.js";
 import { resolveChannelId } from "./resolve.js";
 
 export const replyMessageShape = {
-  messageId: z.string().min(1).describe("The exact ID of the message to reply to. If unknown, use pumble_search_messages to find it first."),
-  channelIdentifier: z.string().min(1).describe("Channel name or ID the message is in"),
-  text: z.string().min(1).describe("The reply message text"),
+  messageId: z.string().min(1).describe("The exact ID of the message to reply to. If unknown, use pumble_search_messages to find it first. (Do not guess)"),
+  channelIdentifier: z.string().min(1).describe("The name or ID of the channel the message is in. (Do not guess)"),
+  text: z.string().min(1).describe("The reply message text. (Do not guess)"),
   asBot: z.boolean().default(false).describe("Send as the bot identity instead of the API key's user"),
 };
 

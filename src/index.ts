@@ -1,24 +1,31 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+import { getScheduledMessage, getScheduledMessageSchema, getScheduledMessageShape } from "./tools/getScheduledMessage.js";
+
 import { sendMessage, sendMessageSchema, sendMessageShape } from "./tools/sendMessage.js";
 import { listMessages, listMessagesSchema, listMessagesShape } from "./tools/listMessages.js";
-import { editMessage, editMessageShape } from "./tools/editMessage.js";
-import { listChannels } from "./tools/listChannels.js";
+import { editMessage, editMessageSchema, editMessageShape } from "./tools/editMessage.js";
+import { listChannels, listChannelsSchema } from "./tools/listChannels.js";
 import { sendDm, sendDmSchema, sendDmShape } from "./tools/sendDm.js";
-import { listUsers } from "./tools/listUsers.js";
+import { sendGroupDm, sendGroupDmSchema, sendGroupDmShape } from "./tools/sendGroupDm.js";
+import { listUsers, listUsersSchema } from "./tools/listUsers.js";
 import { getChannel, getChannelSchema, getChannelShape } from "./tools/getChannel.js";
 import { createChannel, createChannelSchema, createChannelShape } from "./tools/createChannel.js";
 import { addUsersToChannel, addUsersToChannelSchema, addUsersToChannelShape } from "./tools/addUsersToChannel.js";
 import { removeUserFromChannel, removeUserFromChannelSchema, removeUserFromChannelShape } from "./tools/removeUserFromChannel.js";
 import { searchMessages, searchMessagesSchema, searchMessagesShape } from "./tools/searchMessages.js";
-import { addReaction, addReactionShape } from "./tools/addReaction.js";
-import { removeReaction, removeReactionShape } from "./tools/removeReaction.js";
+import { addReaction, addReactionSchema, addReactionShape } from "./tools/addReaction.js";
+import { removeReaction, removeReactionSchema, removeReactionShape } from "./tools/removeReaction.js";
 import { replyMessage, replyMessageSchema, replyMessageShape } from "./tools/replyMessage.js";
 import { listThreadReplies, listThreadRepliesSchema, listThreadRepliesShape } from "./tools/listThreadReplies.js";
 import { listScheduledMessages, listScheduledMessagesSchema, listScheduledMessagesShape } from "./tools/listScheduledMessages.js";
 import { createScheduledMessage, createScheduledMessageSchema, createScheduledMessageShape } from "./tools/createScheduledMessage.js";
 import { editScheduledMessage, editScheduledMessageSchema, editScheduledMessageShape } from "./tools/editScheduledMessage.js";
 import { deleteScheduledMessage, deleteScheduledMessageSchema, deleteScheduledMessageShape } from "./tools/deleteScheduledMessage.js";
+import { getMyInfo, getMyInfoSchema, getMyInfoShape } from "./tools/getMyInfo.js";
+import { listUserGroups, listUserGroupsSchema, listUserGroupsShape } from "./tools/listUserGroups.js";
+import { updateCustomStatus, updateCustomStatusSchema, updateCustomStatusShape } from "./tools/updateCustomStatus.js";
 
 if (!process.env.PUMBLE_API_KEY) {
   console.error("PUMBLE_API_KEY environment variable is not set");
@@ -27,30 +34,56 @@ if (!process.env.PUMBLE_API_KEY) {
 
 const server = new McpServer({ name: "pumble-mcp", version: "0.1.0" });
 
+// Phase 3: Observability & Error Handling
+export function logStderr(message: string, ...args: any[]) {
+  process.stderr.write(`[pumble-mcp] ${message} ${args.length ? JSON.stringify(args) : ""}\n`);
+}
+
+function wrapToolHandler<S extends z.ZodTypeAny>(
+  schema: S,
+  handler: (input: z.infer<S>) => Promise<any>
+) {
+  return async (args: unknown) => {
+    try {
+      const input = schema.parse(args);
+      const result = await handler(input);
+      return { content: [{ type: "text" as const, text: JSON.stringify(result ?? { ok: true }) }] };
+    } catch (error: any) {
+      logStderr("Tool execution error:", error?.message || error);
+      
+      let errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (error instanceof z.ZodError) {
+        const issues = error.issues.map(
+          (issue) => `Field '${issue.path.join(".")}': ${issue.message}`
+        );
+        errorMessage = `Validation Error(s):\n${issues.join("\n")}`;
+      }
+
+      return {
+        isError: true,
+        content: [{ type: "text" as const, text: errorMessage }],
+      };
+    }
+  };
+}
+
 server.registerTool(
   "pumble_send_message",
   {
-    description: "Send a message to a Pumble channel, as your own user by default.",
+    description: "Send a message to a Pumble channel, as your own user by default. The server natively resolves fuzzy names to exact IDs.",
     inputSchema: sendMessageShape,
   },
-  async (args) => {
-    const input = sendMessageSchema.parse(args);
-    const result = await sendMessage(input);
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
-  },
+  wrapToolHandler(sendMessageSchema, sendMessage)
 );
 
 server.registerTool(
   "pumble_list_messages",
   {
-    description: "List messages in a Pumble channel.",
+    description: "List messages in a Pumble channel. The server natively resolves fuzzy names to exact IDs.",
     inputSchema: listMessagesShape,
   },
-  async (args) => {
-    const input = listMessagesSchema.parse(args);
-    const result = await listMessages(input);
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
-  },
+  wrapToolHandler(listMessagesSchema, listMessages)
 );
 
 server.registerTool(
@@ -59,75 +92,89 @@ server.registerTool(
     description: "Edit the text of an existing Pumble message.",
     inputSchema: editMessageShape,
   },
-  async (args) => {
-    const result = await editMessage(args);
-    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
-  },
+  wrapToolHandler(editMessageSchema, editMessage)
 );
 
 server.registerTool(
   "pumble_list_channels",
   {
-    description:
-      "List all Pumble channels visible to the API key, and mention their type (public/private), including DMs (channelType DIRECT) and group DMs. Use the channel's id with pumble_list_messages to read a DM conversation.",
+    description: "List all Pumble channels visible to the API key. CRITICAL: DO NOT use this tool to look up a channel before sending a message. All other tools natively accept fuzzy channel names and resolve them automatically. Only use this tool if the user explicitly asks to see a list of channels.",
     inputSchema: {},
   },
-  async () => {
-    const result = await listChannels({});
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
-  },
+  wrapToolHandler(listChannelsSchema, listChannels)
 );
 
 server.registerTool(
   "pumble_send_dm",
   {
-    description:
-      "Send a direct message to a person in Pumble, as your own user. Use pumble_list_users to find their userId/email first if unknown.",
+    description: "Send a direct message to a person in Pumble, as your own user. Automatically resolves names and emails to user IDs, so you don't need to look them up first.",
     inputSchema: sendDmShape,
   },
-  async (args) => {
-    const input = sendDmSchema.parse(args);
-    const result = await sendDm(input);
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  wrapToolHandler(sendDmSchema, sendDm)
+);
+
+server.registerTool(
+  "pumble_send_group_dm",
+  {
+    description: "Send a direct message to a group of users in Pumble. CRITICAL RULE: You MUST NEVER infer, guess, or hallucinate missing information. Automatically resolves names and emails to user IDs.",
+    inputSchema: sendGroupDmShape,
   },
+  wrapToolHandler(sendGroupDmSchema, sendGroupDm)
 );
 
 server.registerTool(
   "pumble_list_users",
   {
-    description:
-      "List all people in the Pumble workspace (id, name, email). Use this to resolve a person's userId for pumble_send_dm, or find their DM channelId via pumble_list_channels (channelType DIRECT) to read a conversation with pumble_list_messages.",
+    description: "List all users in the workspace to retrieve their details. CRITICAL: DO NOT use this tool to look up a user before sending a message. All other tools natively accept fuzzy names/emails and resolve them automatically. Only use this tool if the user explicitly asks for a list of users.",
     inputSchema: {},
   },
-  async () => {
-    const result = await listUsers({});
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  wrapToolHandler(listUsersSchema, listUsers)
+);
+
+server.registerTool(
+  "pumble_get_my_info",
+  {
+    description: "Get profile information about the current authenticated user.",
+    inputSchema: getMyInfoShape,
   },
+  wrapToolHandler(getMyInfoSchema, getMyInfo)
+);
+
+server.registerTool(
+  "pumble_list_user_groups",
+  {
+    description: "List all user groups in the workspace.",
+    inputSchema: listUserGroupsShape || {},
+  },
+  wrapToolHandler(listUserGroupsSchema, listUserGroups)
+);
+
+server.registerTool(
+  "pumble_update_custom_status",
+  {
+    description: "Update the custom status of the authenticated user.",
+    inputSchema: updateCustomStatusShape,
+  },
+  wrapToolHandler(updateCustomStatusSchema, updateCustomStatus)
 );
 
 server.registerTool(
   "pumble_search_messages",
   {
-    description: "Search for messages across the Pumble workspace. You can filter by text, fromUser (name/email/ID), or inChannel (name/ID). Automatically resolves names to IDs.",
+    description: "Search for messages across the Pumble workspace. Use this to discover message IDs. Automatically resolves names to IDs.",
     inputSchema: searchMessagesShape,
   },
-  async (args) => {
-    const input = searchMessagesSchema.parse(args);
-    const result = await searchMessages(input);
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
-  },
+  wrapToolHandler(searchMessagesSchema, searchMessages)
 );
 
 server.registerTool(
+
   "pumble_add_reaction",
   {
     description: "Add an emoji reaction to a message in Pumble.",
     inputSchema: addReactionShape,
   },
-  async (args) => {
-    const result = await addReaction(args);
-    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
-  },
+  wrapToolHandler(addReactionSchema, addReaction)
 );
 
 server.registerTool(
@@ -136,10 +183,7 @@ server.registerTool(
     description: "Remove an emoji reaction from a message in Pumble.",
     inputSchema: removeReactionShape,
   },
-  async (args) => {
-    const result = await removeReaction(args);
-    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
-  },
+  wrapToolHandler(removeReactionSchema, removeReaction)
 );
 
 server.registerTool(
@@ -148,24 +192,17 @@ server.registerTool(
     description: "Look up a channel by its ID or Name.",
     inputSchema: getChannelShape,
   },
-  async (args) => {
-    const input = getChannelSchema.parse(args);
-    const result = await getChannel(input);
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
-  },
+  wrapToolHandler(getChannelSchema, getChannel)
 );
 
 server.registerTool(
+
   "pumble_create_channel",
   {
     description: "Create a new channel.",
     inputSchema: createChannelShape,
   },
-  async (args) => {
-    const input = createChannelSchema.parse(args);
-    const result = await createChannel(input);
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
-  },
+  wrapToolHandler(createChannelSchema, createChannel)
 );
 
 server.registerTool(
@@ -174,11 +211,7 @@ server.registerTool(
     description: "Add users to a channel.",
     inputSchema: addUsersToChannelShape,
   },
-  async (args) => {
-    const input = addUsersToChannelSchema.parse(args);
-    const result = await addUsersToChannel(input);
-    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
-  },
+  wrapToolHandler(addUsersToChannelSchema, addUsersToChannel)
 );
 
 server.registerTool(
@@ -187,11 +220,7 @@ server.registerTool(
     description: "Remove a user from a channel. This is a destructive operation and requires explicit confirmation.",
     inputSchema: removeUserFromChannelShape,
   },
-  async (args) => {
-    const input = removeUserFromChannelSchema.parse(args);
-    const result = await removeUserFromChannel(input);
-    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
-  },
+  wrapToolHandler(removeUserFromChannelSchema, removeUserFromChannel)
 );
 
 server.registerTool(
@@ -200,11 +229,7 @@ server.registerTool(
     description: "Reply to a message within a channel, creating or continuing a thread. Accepts a channel name or ID and automatically resolves names to IDs.",
     inputSchema: replyMessageShape,
   },
-  async (args) => {
-    const input = replyMessageSchema.parse(args);
-    const result = await replyMessage(input);
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
-  },
+  wrapToolHandler(replyMessageSchema, replyMessage)
 );
 
 server.registerTool(
@@ -213,39 +238,25 @@ server.registerTool(
     description: "Fetch all replies for a given thread or parent message. Accepts a channel name or ID and automatically resolves names to IDs.",
     inputSchema: listThreadRepliesShape,
   },
-  async (args) => {
-    const input = listThreadRepliesSchema.parse(args);
-    const result = await listThreadReplies(input);
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
-  },
+  wrapToolHandler(listThreadRepliesSchema, listThreadReplies)
 );
 
 server.registerTool(
   "pumble_list_scheduled_messages",
   {
-    description: "List scheduled messages in the workspace or filtered by channel or DM recipient (userId/email).",
+    description: "List scheduled messages in the workspace or filtered by channel or DM recipient. Use this to find scheduled message IDs.",
     inputSchema: listScheduledMessagesShape,
   },
-  async (args) => {
-    const input = listScheduledMessagesSchema.parse(args);
-    const result = await listScheduledMessages(input);
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
-  },
+  wrapToolHandler(listScheduledMessagesSchema, listScheduledMessages)
 );
 
 server.registerTool(
   "pumble_create_scheduled_message",
   {
-    description:
-      "Schedule a message to be published in a channel or Direct Message (DM) at a specified future date/time." +
-      "Clarify with user whether target is a Channel or a DM before invoking.",
+    description: "Schedule a message to be published in a channel or Direct Message (DM) at a specified future date/time. Clarify with user whether target is a Channel or a DM before invoking.",
     inputSchema: createScheduledMessageShape,
   },
-  async (args) => {
-    const input = createScheduledMessageSchema.parse(args);
-    const result = await createScheduledMessage(input);
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
-  },
+  wrapToolHandler(createScheduledMessageSchema, createScheduledMessage)
 );
 
 server.registerTool(
@@ -254,11 +265,7 @@ server.registerTool(
     description: "Edit the text or send time of an existing scheduled message.",
     inputSchema: editScheduledMessageShape,
   },
-  async (args) => {
-    const input = editScheduledMessageSchema.parse(args);
-    const result = await editScheduledMessage(input);
-    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
-  },
+  wrapToolHandler(editScheduledMessageSchema, editScheduledMessage)
 );
 
 server.registerTool(
@@ -267,12 +274,16 @@ server.registerTool(
     description: "Cancel/delete a scheduled message. Requires explicit confirmation boolean.",
     inputSchema: deleteScheduledMessageShape,
   },
-  async (args) => {
-    const input = deleteScheduledMessageSchema.parse(args);
-    const result = await deleteScheduledMessage(input);
-    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
-  },
+  wrapToolHandler(deleteScheduledMessageSchema, deleteScheduledMessage)
 );
 
+server.registerTool(
+  "pumble_get_scheduled_message",
+  {
+    description: "Fetch a specific scheduled message's details by ID.",
+    inputSchema: getScheduledMessageShape,
+  },
+  wrapToolHandler(getScheduledMessageSchema, getScheduledMessage)
+);
 const transport = new StdioServerTransport();
 await server.connect(transport);

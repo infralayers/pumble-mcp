@@ -2,11 +2,11 @@ import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
 
 export const createChannelShape = {
-  name: z.string().describe(
-    "The name of the new channel. Ask the user for this value if they haven't provided it - don't guess a name."
+  name: z.string().min(1).describe(
+    "The name of the new channel. (Do not guess)"
   ),
   type: z.enum(["PUBLIC", "PRIVATE"]).describe(
-    "The type of the channel (PUBLIC or PRIVATE). Ask the user for this value if they haven't provided it - don't default it."
+    "The type of the channel (PUBLIC or PRIVATE). (Do not guess)"
   ),
 };
 
