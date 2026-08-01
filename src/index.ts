@@ -13,6 +13,8 @@ import { removeUserFromChannel, removeUserFromChannelSchema, removeUserFromChann
 import { searchMessages, searchMessagesSchema, searchMessagesShape } from "./tools/searchMessages.js";
 import { addReaction, addReactionShape } from "./tools/addReaction.js";
 import { removeReaction, removeReactionShape } from "./tools/removeReaction.js";
+import { replyMessage, replyMessageSchema, replyMessageShape } from "./tools/replyMessage.js";
+import { listThreadReplies, listThreadRepliesSchema, listThreadRepliesShape } from "./tools/listThreadReplies.js";
 
 if (!process.env.PUMBLE_API_KEY) {
   console.error("PUMBLE_API_KEY environment variable is not set");
@@ -185,6 +187,32 @@ server.registerTool(
     const input = removeUserFromChannelSchema.parse(args);
     const result = await removeUserFromChannel(input);
     return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_reply_message",
+  {
+    description: "Reply to a message within a channel, creating or continuing a thread. Accepts a channel name or ID and automatically resolves names to IDs.",
+    inputSchema: replyMessageShape,
+  },
+  async (args) => {
+    const input = replyMessageSchema.parse(args);
+    const result = await replyMessage(input);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_list_thread_replies",
+  {
+    description: "Fetch all replies for a given thread or parent message. Accepts a channel name or ID and automatically resolves names to IDs.",
+    inputSchema: listThreadRepliesShape,
+  },
+  async (args) => {
+    const input = listThreadRepliesSchema.parse(args);
+    const result = await listThreadReplies(input);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
   },
 );
 
