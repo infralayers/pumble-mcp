@@ -15,7 +15,7 @@ export type DeleteScheduledMessageInput = z.infer<typeof deleteScheduledMessageS
 export async function deleteScheduledMessage(input: DeleteScheduledMessageInput) {
   return pumbleRequest<{ ok?: boolean }>("/deleteScheduledMessage", {
     method: "DELETE",
-    body: {
+    query: {
       scheduledMessageId: input.scheduledMessageId,
     },
   });
