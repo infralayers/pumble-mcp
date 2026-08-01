@@ -15,6 +15,10 @@ import { addReaction, addReactionShape } from "./tools/addReaction.js";
 import { removeReaction, removeReactionShape } from "./tools/removeReaction.js";
 import { replyMessage, replyMessageSchema, replyMessageShape } from "./tools/replyMessage.js";
 import { listThreadReplies, listThreadRepliesSchema, listThreadRepliesShape } from "./tools/listThreadReplies.js";
+import { listScheduledMessages, listScheduledMessagesSchema, listScheduledMessagesShape } from "./tools/listScheduledMessages.js";
+import { createScheduledMessage, createScheduledMessageSchema, createScheduledMessageShape } from "./tools/createScheduledMessage.js";
+import { editScheduledMessage, editScheduledMessageSchema, editScheduledMessageShape } from "./tools/editScheduledMessage.js";
+import { deleteScheduledMessage, deleteScheduledMessageSchema, deleteScheduledMessageShape } from "./tools/deleteScheduledMessage.js";
 
 if (!process.env.PUMBLE_API_KEY) {
   console.error("PUMBLE_API_KEY environment variable is not set");
@@ -213,6 +217,60 @@ server.registerTool(
     const input = listThreadRepliesSchema.parse(args);
     const result = await listThreadReplies(input);
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_list_scheduled_messages",
+  {
+    description: "List scheduled messages in the workspace or filtered by channel or DM recipient (userId/email).",
+    inputSchema: listScheduledMessagesShape,
+  },
+  async (args) => {
+    const input = listScheduledMessagesSchema.parse(args);
+    const result = await listScheduledMessages(input);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_create_scheduled_message",
+  {
+    description:
+      "Schedule a message to be published in a channel or Direct Message (DM) at a specified future date/time." +
+      "Clarify with user whether target is a Channel or a DM before invoking.",
+    inputSchema: createScheduledMessageShape,
+  },
+  async (args) => {
+    const input = createScheduledMessageSchema.parse(args);
+    const result = await createScheduledMessage(input);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_edit_scheduled_message",
+  {
+    description: "Edit the text or send time of an existing scheduled message.",
+    inputSchema: editScheduledMessageShape,
+  },
+  async (args) => {
+    const input = editScheduledMessageSchema.parse(args);
+    const result = await editScheduledMessage(input);
+    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
+  },
+);
+
+server.registerTool(
+  "pumble_delete_scheduled_message",
+  {
+    description: "Cancel/delete a scheduled message. Requires explicit confirmation boolean.",
+    inputSchema: deleteScheduledMessageShape,
+  },
+  async (args) => {
+    const input = deleteScheduledMessageSchema.parse(args);
+    const result = await deleteScheduledMessage(input);
+    return { content: [{ type: "text", text: JSON.stringify(result ?? { ok: true }) }] };
   },
 );
 
