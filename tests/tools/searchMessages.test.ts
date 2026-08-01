@@ -116,4 +116,24 @@ describe("searchMessages", () => {
 
     await expect(searchMessages(input)).rejects.toThrow(/Channel with name 'ghost channel' could not be found/);
   });
+
+  it("passes date filters (after and before) to the backend", async () => {
+    const fetchMock = vi.fn().mockImplementation(() => {
+      return Promise.resolve({ ok: true, text: async () => JSON.stringify({ messages: [] }) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = searchMessagesSchema.parse({
+      text: "hello",
+      after: "2026-01-01T00:00:00Z",
+      before: "2026-08-01T00:00:00Z"
+    });
+
+    await searchMessages(input);
+
+    const apiCall = fetchMock.mock.calls.find((c: any) => c[0].toString().includes("searchMessages"));
+    const body = JSON.parse(apiCall[1].body);
+    expect(body.after).toBe("2026-01-01T00:00:00Z");
+    expect(body.before).toBe("2026-08-01T00:00:00Z");
+  });
 });

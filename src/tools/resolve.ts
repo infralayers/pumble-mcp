@@ -68,15 +68,31 @@ export async function resolveChannelId(identifier: string): Promise<string> {
   const channelsList = (await listChannels({})) as PumbleChannelListItem[];
   const matches = matchChannelsByName(identifier, channelsList);
 
-  if (matches.length === 0) {
-    throw new Error(`Channel with name '${identifier}' could not be found in the workspace.`);
+  if (matches.length === 1) {
+    return matches[0].channel!.id;
   }
   if (matches.length > 1) {
     throw new Error(
       `'${identifier}' matches multiple channels in the workspace: ${describeChannelCandidates(matches)}. Provide the exact channel ID instead.`,
     );
   }
-  return matches[0].channel!.id;
+
+  // Phase 2: If no channel matches by name, try resolving it as a User to find their DM channel
+  try {
+    const userId = await resolveUserId(identifier);
+    // Find a DIRECT channel containing this user
+    const dmChannel = channelsList.find(c => 
+      c.channel?.channelType === "DIRECT" && 
+      c.users?.includes(userId)
+    );
+    if (dmChannel && dmChannel.channel?.id) {
+      return dmChannel.channel.id;
+    }
+    throw new Error(`User '${identifier}' found, but no DM channel exists with them.`);
+  } catch (err) {
+    // If resolveUserId fails, throw the original channel not found error
+    throw new Error(`Channel with name '${identifier}' could not be found in the workspace.`);
+  }
 }
 
 /**
