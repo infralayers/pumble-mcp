@@ -193,7 +193,7 @@ server.registerTool(
 server.registerTool(
   "pumble_reply_message",
   {
-    description: "Reply to a message within a channel, creating or continuing a thread.",
+    description: "Reply to a message within a channel, creating or continuing a thread. Accepts a channel name or ID and automatically resolves names to IDs.",
     inputSchema: replyMessageShape,
   },
   async (args) => {
@@ -206,7 +206,7 @@ server.registerTool(
 server.registerTool(
   "pumble_list_thread_replies",
   {
-    description: "Fetch all replies for a given thread or parent message.",
+    description: "Fetch all replies for a given thread or parent message. Accepts a channel name or ID and automatically resolves names to IDs.",
     inputSchema: listThreadRepliesShape,
   },
   async (args) => {
