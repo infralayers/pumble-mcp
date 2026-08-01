@@ -14,7 +14,7 @@ describe("editScheduledMessageSchema", () => {
     const res = editScheduledMessageSchema.safeParse({
       scheduledMessageId: EXISTING.id,
       channel: "general",
-      userId: "668e30546a5ea56c5d83f46b",
+      userId: "507f1f77bcf86cd799439011",
     });
     expect(res.success).toBe(false);
   });

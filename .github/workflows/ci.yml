@@ -16,3 +16,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # Fixtures get copied out of real workspaces. Fail the build if a real
+      # mail domain lands in a tracked file - use example.com in test data.
+      - name: Check for personal data in tracked files
+        run: |
+          if git ls-files -z | xargs -0 grep -InE '@(gmail|proton|outlook|yahoo|hotmail|icloud)\.[a-z]+'; then
+            echo "::error::Real email domain found above. Use @example.com in fixtures."
+            exit 1
+          fi

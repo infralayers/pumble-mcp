@@ -17,18 +17,22 @@ and the workspace user directory. See `SPEC.md` for the full design.
 
 ## 2. Configure the key
 
-```bash
-cp .env.example .env
-# edit .env and set PUMBLE_API_KEY=<your key>
-```
+The server reads `PUMBLE_API_KEY` from its own environment. It does **not**
+load a `.env` file on its own, so set the variable one of these two ways.
 
-`.env` is gitignored — never commit it. If you'd rather set it globally for
-your shell (so any tool can use it without a `.env` file), add to
-`~/.bashrc`:
+For running the server directly (`npm run dev`, `npm start`), export it in your
+shell — add this to `~/.bashrc` to make it stick:
 
 ```bash
 export PUMBLE_API_KEY="<your key>"
 ```
+
+For normal use through an MCP client, pass it in the client's `env` block
+instead — see step 4. That is the usual path, and it needs nothing in your
+shell.
+
+`.env.example` lists the variables the server understands. If you keep a local
+`.env` for your own tooling, it is gitignored — never commit it.
 
 ## 3. Install, build
 

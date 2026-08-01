@@ -15,6 +15,9 @@ export type PumbleRequestInit = {
 };
 
 export async function pumbleRequest<T>(path: string, init: PumbleRequestInit): Promise<T> {
+  // `path` must stay a hard-coded literal. It resolves against the base URL, so
+  // caller-supplied input like "//evil.com" would replace the host entirely and
+  // send the API key there. Put variable data in `query` or `body` instead.
   const url = new URL(path, PUMBLE_BASE_URL);
   if (init.query) {
     for (const [key, value] of Object.entries(init.query)) {

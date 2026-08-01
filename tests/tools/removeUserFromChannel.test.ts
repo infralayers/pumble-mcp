@@ -48,7 +48,7 @@ describe("removeUserFromChannel", () => {
       .mockResolvedValueOnce({ // listUsers
         ok: true,
         text: async () => JSON.stringify([
-          { id: "usr1", name: "Aliyan Hammad" }
+          { id: "usr1", name: "Jordan Blake" }
         ]),
       })
       .mockResolvedValueOnce({ // removeUserFromChannel
@@ -60,7 +60,7 @@ describe("removeUserFromChannel", () => {
 
     const input = removeUserFromChannelSchema.parse({
       channel: "general",
-      user: "Aliyan Hammad",
+      user: "Jordan Blake",
       confirm: true
     });
     
@@ -101,8 +101,8 @@ describe("removeUserFromChannel", () => {
       .mockResolvedValueOnce({ // listUsers
         ok: true,
         text: async () => JSON.stringify([
-          { id: "usr1", name: "AbdulRehman", email: "abdul.old@example.com" },
-          { id: "usr2", name: "AbdulRehman", email: "abdul.new@example.com" },
+          { id: "usr1", name: "Casey Morgan", email: "casey.old@example.com" },
+          { id: "usr2", name: "Casey Morgan", email: "casey.new@example.com" },
         ]),
       });
 
@@ -110,7 +110,7 @@ describe("removeUserFromChannel", () => {
 
     const input = removeUserFromChannelSchema.parse({
       channelId: "chan1",
-      user: "AbdulRehman",
+      user: "Casey Morgan",
       confirm: true,
     });
 
@@ -142,7 +142,7 @@ describe("removeUserFromChannel", () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ // listUsers
         ok: true,
-        text: async () => JSON.stringify([{ id: "usr1", name: "Aliyan Hammad" }]),
+        text: async () => JSON.stringify([{ id: "usr1", name: "Jordan Blake" }]),
       })
       .mockResolvedValueOnce({ // removeUserFromChannel
         ok: true,
@@ -153,7 +153,7 @@ describe("removeUserFromChannel", () => {
 
     const input = removeUserFromChannelSchema.parse({
       channelId: "chan1",
-      user: "ALIYAN HAMMAD",
+      user: "JORDAN BLAKE",
       confirm: true,
     });
 

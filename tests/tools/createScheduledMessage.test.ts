@@ -7,7 +7,7 @@ const BASE = { text: "Test scheduler", sendAt: 1784620000000 };
 describe("createScheduledMessageSchema", () => {
   it.each([
     ["no target", {}],
-    ["two targets", { channel: "general", userId: "668e30546a5ea56c5d83f46b" }],
+    ["two targets", { channel: "general", userId: "507f1f77bcf86cd799439011" }],
   ])("requires exactly one destination: %s", (_label, target) => {
     expect(createScheduledMessageSchema.safeParse({ ...BASE, ...target }).success).toBe(false);
   });
