@@ -12,15 +12,11 @@ describe("isLikelyId", () => {
     expect(isLikelyId("507f1f77bcf86cd799439011")).toBe(true);
   });
 
-  it("recognizes mock test IDs (u1, c1)", () => {
-    expect(isLikelyId("u1")).toBe(true);
-    expect(isLikelyId("c99")).toBe(true);
-  });
-
   it("rejects names and emails", () => {
     expect(isLikelyId("general")).toBe(false);
     expect(isLikelyId("a@b.com")).toBe(false);
     expect(isLikelyId("507f1f77bcf86cd79943901")).toBe(false); // 23 chars
+    expect(isLikelyId("u1")).toBe(false);
   });
 });
 
@@ -73,14 +69,14 @@ describe("resolveChannelId / resolveUserId", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("resolveUserId throws on zero matches with DO NOT guess rule", async () => {
+  it("resolveUserId throws on zero matches", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => JSON.stringify([]) });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(resolveUserId("Ghost User")).rejects.toThrow(/User not found for 'Ghost User'. CRITICAL RULE: DO NOT guess/);
+    await expect(resolveUserId("Ghost User")).rejects.toThrow(/Ghost User' could not be found/);
   });
 
-  it("resolveUserId throws on ambiguous matches with DO NOT guess rule", async () => {
+  it("resolveUserId throws on ambiguous matches", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       text: async () =>
@@ -91,7 +87,7 @@ describe("resolveChannelId / resolveUserId", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(resolveUserId("Casey Morgan")).rejects.toThrow(/Ambiguous name 'Casey Morgan'. Multiple matches found:.*CRITICAL RULE: DO NOT guess/);
+    await expect(resolveUserId("Casey Morgan")).rejects.toThrow(/'Casey Morgan' matches multiple users/);
   });
 
   it("resolveUserId throws when resolving an exact email of a DEACTIVATED user", async () => {
@@ -103,7 +99,7 @@ describe("resolveChannelId / resolveUserId", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(resolveUserId("bob@example.com")).rejects.toThrow(/is deactivated and cannot be added/);
+    await expect(resolveUserId("bob@example.com")).rejects.toThrow(/is deactivated/);
   });
 
   it("resolveUserId filters out DEACTIVATED users during name matching", async () => {

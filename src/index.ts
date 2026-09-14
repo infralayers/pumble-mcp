@@ -96,8 +96,7 @@ server.registerTool(
 server.registerTool(
   "pumble_send_group_dm",
   {
-    description:
-      "Send a direct message to a group of users in Pumble. CRITICAL RULE: You MUST NEVER infer, guess, or hallucinate missing information (such as the message text or recipients). If ANY required information is missing or unclear, you MUST STOP and ask the human explicitly. DO NOT attempt to fill in the blanks yourself. Provide exactly what the human asked.",
+    description: "Send a direct message to a group of 2-8 users in Pumble (userIds, emails, or names).",
     inputSchema: sendGroupDmShape,
   },
   async (args) => {

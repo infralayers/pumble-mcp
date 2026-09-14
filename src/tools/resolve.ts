@@ -1,8 +1,7 @@
 import { listChannels } from "./listChannels.js";
 import { listUsers } from "./listUsers.js";
 
-// Supports standard 24-character hex IDs from Pumble, as well as u1/c1 mock IDs used in unit tests.
-const ID_PATTERN = /^[0-9a-fA-F]{24}$|^[uc]\d+$/;
+const ID_PATTERN = /^[0-9a-fA-F]{24}$/;
 
 export interface PumbleChannelListItem {
   channel?: {
@@ -30,27 +29,30 @@ export function matchChannelsByName(identifier: string, channelsList: PumbleChan
   return channelsList.filter((c) => c.channel?.name?.toLowerCase() === lower);
 }
 
+/** Lowercases and strips whitespace, so "Bob Builder" and "bobbuilder" compare equal. */
+function normalize(s?: string): string | undefined {
+  return s?.toLowerCase().replace(/\s+/g, "");
+}
+
 export function matchUsersByNameOrEmail(identifier: string, usersList: PumbleUser[]): PumbleUser[] {
   const lowerTarget = identifier.toLowerCase();
-  
+
   // Phase 1: Exact Email
-  const exactEmailMatches = usersList.filter(u => u.email?.toLowerCase() === lowerTarget);
+  const exactEmailMatches = usersList.filter((u) => u.email?.toLowerCase() === lowerTarget);
   if (exactEmailMatches.length > 0) return exactEmailMatches;
 
   // Phase 2: Exact Name
-  const exactNameMatches = usersList.filter(u => 
-    (u.name && u.name.toLowerCase() === lowerTarget) || 
-    (u.realName && u.realName.toLowerCase() === lowerTarget)
+  const exactNameMatches = usersList.filter(
+    (u) => u.name?.toLowerCase() === lowerTarget || u.realName?.toLowerCase() === lowerTarget,
   );
   if (exactNameMatches.length > 0) return exactNameMatches;
 
   // Phase 3: Substring Name (space-insensitive)
-  const normalizedTarget = lowerTarget.replace(/\s+/g, '');
-  return usersList.filter(u => {
-    const normalizedName = u.name?.toLowerCase().replace(/\s+/g, '');
-    const normalizedRealName = u.realName?.toLowerCase().replace(/\s+/g, '');
-    return (normalizedName && normalizedName.includes(normalizedTarget)) || 
-           (normalizedRealName && normalizedRealName.includes(normalizedTarget));
+  const normalizedTarget = normalize(identifier)!;
+  return usersList.filter((u) => {
+    const name = normalize(u.name);
+    const realName = normalize(u.realName);
+    return (name && name.includes(normalizedTarget)) || (realName && realName.includes(normalizedTarget));
   });
 }
 
@@ -111,23 +113,22 @@ export async function resolveUserId(identifier: string): Promise<string> {
   if (isLikelyId(identifier)) return identifier;
 
   const usersList = (await listUsers({})) as PumbleUser[];
-  const rawMatches = matchUsersByNameOrEmail(identifier, usersList);
-
-  const lowerTarget = identifier.toLowerCase();
-  const deactivatedEmailMatch = rawMatches.find(u => u.email?.toLowerCase() === lowerTarget && u.status === "DEACTIVATED");
-  if (deactivatedEmailMatch) {
-    throw new Error(`User with email '${identifier}' is deactivated and cannot be added to a DM.`);
-  }
-
-  const activeMatches = rawMatches.filter(u => u.status !== "DEACTIVATED");
+  const activeUsersList = usersList.filter((u) => u.status !== "DEACTIVATED");
+  const activeMatches = matchUsersByNameOrEmail(identifier, activeUsersList);
 
   if (activeMatches.length === 0) {
-    throw new Error(`User not found for '${identifier}'. CRITICAL RULE: DO NOT guess. Abort workflow or request precise email/ID from the caller.`);
+    const matchedDeactivatedUser = matchUsersByNameOrEmail(identifier, usersList).some(
+      (u) => u.status === "DEACTIVATED",
+    );
+    if (matchedDeactivatedUser) {
+      throw new Error(`User '${identifier}' is deactivated and cannot be resolved.`);
+    }
+    throw new Error(`User '${identifier}' could not be found in the workspace.`);
   }
-  
+
   if (activeMatches.length > 1) {
     throw new Error(
-      `Ambiguous name '${identifier}'. Multiple matches found: ${describeUserCandidates(activeMatches)}. CRITICAL RULE: DO NOT guess. Abort workflow or request precise email/ID from the caller.`,
+      `'${identifier}' matches multiple users in the workspace: ${describeUserCandidates(activeMatches)}. Provide the exact user ID instead.`,
     );
   }
   return activeMatches[0].id;
