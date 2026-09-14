@@ -108,6 +108,6 @@ describe("updateCustomStatus", () => {
         code: ":calendar:",
         expiresAt: "invalid-date-string",
       })
-    ).rejects.toThrow("Invalid ISO-8601 date string provided for expiresAt.");
+    ).rejects.toThrow("Invalid date format for expiresAt: invalid-date-string");
   });
 });

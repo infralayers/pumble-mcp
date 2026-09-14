@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
+import { toEpochMs } from "./createScheduledMessage.js";
 
 export const updateCustomStatusShape = {
   status: z.string().min(1).max(128).describe("The status message text (1-128 chars)."),
@@ -20,16 +21,7 @@ export const updateCustomStatusSchema = z.object(updateCustomStatusShape);
 export type UpdateCustomStatusInput = z.infer<typeof updateCustomStatusSchema>;
 
 export async function updateCustomStatus(input: UpdateCustomStatusInput) {
-  let expiresAtMs: number;
-  if (typeof input.expiresAt === "number") {
-    expiresAtMs = input.expiresAt;
-  } else {
-    const parsed = Date.parse(input.expiresAt);
-    if (isNaN(parsed)) {
-      throw new Error("Invalid ISO-8601 date string provided for expiresAt.");
-    }
-    expiresAtMs = parsed;
-  }
+  const expiresAtMs = toEpochMs(input.expiresAt, "expiresAt");
 
   return pumbleRequest<{ ok?: boolean }>("/customStatus", {
     method: "POST",
