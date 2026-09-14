@@ -15,7 +15,9 @@ export interface PumbleChannelListItem {
 export interface PumbleUser {
   id: string;
   name?: string;
+  realName?: string;
   email?: string;
+  status?: string;
 }
 
 export function isLikelyId(identifier: string): boolean {
@@ -27,11 +29,31 @@ export function matchChannelsByName(identifier: string, channelsList: PumbleChan
   return channelsList.filter((c) => c.channel?.name?.toLowerCase() === lower);
 }
 
+/** Lowercases and strips whitespace, so "Bob Builder" and "bobbuilder" compare equal. */
+function normalize(s?: string): string | undefined {
+  return s?.toLowerCase().replace(/\s+/g, "");
+}
+
 export function matchUsersByNameOrEmail(identifier: string, usersList: PumbleUser[]): PumbleUser[] {
-  const lower = identifier.toLowerCase();
-  return usersList.filter(
-    (u) => u.name?.toLowerCase() === lower || u.email?.toLowerCase() === lower,
+  const lowerTarget = identifier.toLowerCase();
+
+  // Phase 1: Exact Email
+  const exactEmailMatches = usersList.filter((u) => u.email?.toLowerCase() === lowerTarget);
+  if (exactEmailMatches.length > 0) return exactEmailMatches;
+
+  // Phase 2: Exact Name
+  const exactNameMatches = usersList.filter(
+    (u) => u.name?.toLowerCase() === lowerTarget || u.realName?.toLowerCase() === lowerTarget,
   );
+  if (exactNameMatches.length > 0) return exactNameMatches;
+
+  // Phase 3: Substring Name (space-insensitive)
+  const normalizedTarget = normalize(identifier)!;
+  return usersList.filter((u) => {
+    const name = normalize(u.name);
+    const realName = normalize(u.realName);
+    return (name && name.includes(normalizedTarget)) || (realName && realName.includes(normalizedTarget));
+  });
 }
 
 export function describeChannelCandidates(matches: PumbleChannelListItem[]): string {
@@ -39,13 +61,9 @@ export function describeChannelCandidates(matches: PumbleChannelListItem[]): str
 }
 
 export function describeUserCandidates(matches: PumbleUser[]): string {
-  return matches.map((u) => `${u.name} <${u.email || "no email"}> (id: ${u.id})`).join(", ");
+  return matches.map((u) => `${u.name || u.realName} <${u.email || "no email"}> (id: ${u.id})`).join(", ");
 }
 
-/**
- * Resolve a channel name or ID to a channel ID. Throws if the name matches
- * zero or more than one channel, rather than silently guessing.
- */
 export async function resolveChannelId(identifier: string): Promise<string> {
   if (isLikelyId(identifier)) return identifier;
 
@@ -95,17 +113,25 @@ export async function resolveUserId(identifier: string): Promise<string> {
   if (isLikelyId(identifier)) return identifier;
 
   const usersList = (await listUsers({})) as PumbleUser[];
-  const matches = matchUsersByNameOrEmail(identifier, usersList);
+  const activeUsersList = usersList.filter((u) => u.status !== "DEACTIVATED");
+  const activeMatches = matchUsersByNameOrEmail(identifier, activeUsersList);
 
-  if (matches.length === 0) {
+  if (activeMatches.length === 0) {
+    const matchedDeactivatedUser = matchUsersByNameOrEmail(identifier, usersList).some(
+      (u) => u.status === "DEACTIVATED",
+    );
+    if (matchedDeactivatedUser) {
+      throw new Error(`User '${identifier}' is deactivated and cannot be resolved.`);
+    }
     throw new Error(`User '${identifier}' could not be found in the workspace.`);
   }
-  if (matches.length > 1) {
+
+  if (activeMatches.length > 1) {
     throw new Error(
-      `'${identifier}' matches multiple users in the workspace: ${describeUserCandidates(matches)}. Provide the exact user ID instead.`,
+      `'${identifier}' matches multiple users in the workspace: ${describeUserCandidates(activeMatches)}. Provide the exact user ID instead.`,
     );
   }
-  return matches[0].id;
+  return activeMatches[0].id;
 }
 
 export interface ChannelDestination {

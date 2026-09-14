@@ -92,7 +92,7 @@ describe("removeUserFromChannel", () => {
       confirm: true
     });
     
-    await expect(removeUserFromChannel(input)).rejects.toThrow(/User 'Ghost User' could not be found/);
+    await expect(removeUserFromChannel(input)).rejects.toThrow(/Ghost User' could not be found/);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -114,7 +114,7 @@ describe("removeUserFromChannel", () => {
       confirm: true,
     });
 
-    await expect(removeUserFromChannel(input)).rejects.toThrow(/matches multiple users/);
+    await expect(removeUserFromChannel(input)).rejects.toThrow(/'Casey Morgan' matches multiple users/);
     // Must not call the removal API when the target is ambiguous
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
