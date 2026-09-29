@@ -44,18 +44,18 @@ describe("sendGroupDm", () => {
   }
 
   it("validates missing recipients", () => {
-    const result = sendGroupDmSchema.safeParse({ text: "Hello", users: [] });
+    const result = sendGroupDmSchema.safeParse({ text: "Hello", userIdentifiers: [] });
     expect(result.success).toBe(false);
   });
 
   it("validates successful payload", () => {
-    const result = sendGroupDmSchema.safeParse({ text: "Hello", users: [ALICE_SMITH_ID, BOB_ID] });
+    const result = sendGroupDmSchema.safeParse({ text: "Hello", userIdentifiers: [ALICE_SMITH_ID, BOB_ID] });
     expect(result.success).toBe(true);
   });
 
   it("sends group DM with a raw ID and an email", async () => {
     const fetchMock = setupFetchMock();
-    await sendGroupDm({ text: "Hello", users: [RAW_ID, "alice.s@example.com"] });
+    await sendGroupDm({ text: "Hello", userIdentifiers: [RAW_ID, "alice.s@example.com"] });
 
     const dmCall = fetchMock.mock.calls.find((call) => call[0].toString().includes("/dmGroup"));
     expect(dmCall).toBeDefined();
@@ -67,7 +67,7 @@ describe("sendGroupDm", () => {
 
   it("resolves names and emails together", async () => {
     const fetchMock = setupFetchMock();
-    await sendGroupDm({ text: "Hello", users: ["alice.s@example.com", "Bob Builder"] });
+    await sendGroupDm({ text: "Hello", userIdentifiers: ["alice.s@example.com", "Bob Builder"] });
 
     const dmCall = fetchMock.mock.calls.find((call) => call[0].toString().includes("/dmGroup"));
     expect(dmCall).toBeDefined();
@@ -79,7 +79,7 @@ describe("sendGroupDm", () => {
 
   it("resolves a single user by substring name (along with another user)", async () => {
     const fetchMock = setupFetchMock();
-    await sendGroupDm({ text: "Hello", users: ["Builder", "alice.s@example.com"] });
+    await sendGroupDm({ text: "Hello", userIdentifiers: ["Builder", "alice.s@example.com"] });
 
     const dmCall = fetchMock.mock.calls.find((call) => call[0].toString().includes("/dmGroup"));
     expect(dmCall).toBeDefined();
@@ -91,34 +91,34 @@ describe("sendGroupDm", () => {
 
   it("throws on ambiguous exact name", async () => {
     setupFetchMock();
-    await expect(sendGroupDm({ text: "Hello", users: ["Alice", "Bob"] })).rejects.toThrow(
+    await expect(sendGroupDm({ text: "Hello", userIdentifiers: ["Alice", "Bob"] })).rejects.toThrow(
       /'Alice' matches multiple users/,
     );
   });
 
   it("throws on ambiguous substring", async () => {
     setupFetchMock();
-    await expect(sendGroupDm({ text: "Hello", users: ["Ali", "Bob"] })).rejects.toThrow(
+    await expect(sendGroupDm({ text: "Hello", userIdentifiers: ["Ali", "Bob"] })).rejects.toThrow(
       /'Ali' matches multiple users/,
     );
   });
 
   it("throws when user not found", async () => {
     setupFetchMock();
-    await expect(sendGroupDm({ text: "Hello", users: ["Charlie", "Bob Builder"] })).rejects.toThrow(
+    await expect(sendGroupDm({ text: "Hello", userIdentifiers: ["Charlie", "Bob Builder"] })).rejects.toThrow(
       /Charlie' could not be found/,
     );
   });
 
   it("throws when less than 2 recipients are provided", () => {
-    const result = sendGroupDmSchema.safeParse({ text: "Hello", users: [ALICE_SMITH_ID] });
+    const result = sendGroupDmSchema.safeParse({ text: "Hello", userIdentifiers: [ALICE_SMITH_ID] });
     expect(result.success).toBe(false);
   });
 
   it("throws when more than 8 recipients are provided", () => {
     const result = sendGroupDmSchema.safeParse({
       text: "Hello",
-      users: ["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9"],
+      userIdentifiers: ["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9"],
     });
     expect(result.success).toBe(false);
   });
