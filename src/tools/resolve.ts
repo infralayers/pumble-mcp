@@ -75,7 +75,7 @@ export async function resolveChannelId(identifier: string): Promise<string> {
   }
   if (matches.length > 1) {
     throw new Error(
-      `'${identifier}' matches multiple channels in the workspace: ${describeChannelCandidates(matches)}. Provide the exact channel ID instead.`,
+      `'${identifier}' matches multiple channels in the workspace: ${describeChannelCandidates(matches)}. Provide the exact channel ID instead. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`,
     );
   }
 
@@ -90,10 +90,10 @@ export async function resolveChannelId(identifier: string): Promise<string> {
     if (dmChannel && dmChannel.channel?.id) {
       return dmChannel.channel.id;
     }
-    throw new Error(`User '${identifier}' found, but no DM channel exists with them.`);
+    throw new Error(`User '${identifier}' found, but no DM channel exists with them. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`);
   } catch (err) {
     // If resolveUserId fails, throw the original channel not found error
-    throw new Error(`Channel with name '${identifier}' could not be found in the workspace.`);
+    throw new Error(`Channel with name '${identifier}' could not be found in the workspace. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`);
   }
 }
 
@@ -115,7 +115,7 @@ async function resolveDmChannelId(userId: string): Promise<string> {
   );
   if (!directChannel?.channel?.id) {
     throw new Error(
-      `No existing DM channel with user '${userId}'. Send them a direct message first, then schedule.`,
+      `No existing DM channel with user '${userId}'. Send them a direct message first, then schedule. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`,
     );
   }
   return directChannel.channel.id;
@@ -137,14 +137,14 @@ export async function resolveUserId(identifier: string): Promise<string> {
       (u) => u.status === "DEACTIVATED",
     );
     if (matchedDeactivatedUser) {
-      throw new Error(`User '${identifier}' is deactivated and cannot be resolved.`);
+      throw new Error(`User '${identifier}' is deactivated and cannot be resolved. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`);
     }
-    throw new Error(`User '${identifier}' could not be found in the workspace.`);
+    throw new Error(`User '${identifier}' could not be found in the workspace. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`);
   }
 
   if (activeMatches.length > 1) {
     throw new Error(
-      `'${identifier}' matches multiple users in the workspace: ${describeUserCandidates(activeMatches)}. Provide the exact user ID instead.`,
+      `'${identifier}' matches multiple users in the workspace: ${describeUserCandidates(activeMatches)}. Provide the exact user ID instead. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`,
     );
   }
   return activeMatches[0].id;

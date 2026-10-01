@@ -72,7 +72,7 @@ function wrapToolHandler<S extends z.ZodTypeAny>(
 }
 
 server.registerTool(
-  "pumble_send_message",
+  "pumble_send_message_via_channel_name_or_id",
   {
     description: "Send a message to a Pumble channel, as your own user by default. The server natively resolves fuzzy names to exact IDs.",
     inputSchema: sendMessageShape,
@@ -81,7 +81,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_list_messages",
+  "pumble_list_messages_via_channel_name_or_id",
   {
     description: "List messages in a Pumble channel. The server natively resolves fuzzy names to exact IDs.",
     inputSchema: listMessagesShape,
@@ -108,7 +108,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_send_dm",
+  "pumble_send_dm_via_name_email_or_id",
   {
     description: "Send a direct message to a person in Pumble, as your own user. Automatically resolves names and emails to user IDs, so you don't need to look them up first.",
     inputSchema: sendDmShape,
@@ -117,7 +117,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_send_group_dm",
+  "pumble_send_group_dm_via_name_email_or_id",
   {
     description: "Send a direct message to a group of users in Pumble. Automatically resolves names and emails to user IDs.",
     inputSchema: sendGroupDmShape,
@@ -166,7 +166,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_get_channel",
+  "pumble_get_channel_via_name_or_id",
   {
     description: "Look up a channel by its ID or Name.",
     inputSchema: getChannelShape,
@@ -185,7 +185,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_add_users_to_channel",
+  "pumble_add_users_to_channel_via_name_or_id",
   {
     description: "Add users to a channel.",
     inputSchema: addUsersToChannelShape,
@@ -194,7 +194,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_remove_user_from_channel",
+  "pumble_remove_user_from_channel_via_name_or_id",
   {
     description: "Remove a user from a channel. This is a destructive operation and requires explicit confirmation.",
     inputSchema: removeUserFromChannelShape,
@@ -203,7 +203,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_reply_message",
+  "pumble_reply_message_via_channel_name_or_id",
   {
     description: "Reply to a message within a channel, creating or continuing a thread. Accepts a channel name or ID and automatically resolves names to IDs.",
     inputSchema: replyMessageShape,
@@ -212,7 +212,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_list_thread_replies",
+  "pumble_list_thread_replies_via_channel_name_or_id",
   {
     description: "Fetch all replies for a given thread or parent message. Accepts a channel name or ID and automatically resolves names to IDs.",
     inputSchema: listThreadRepliesShape,
