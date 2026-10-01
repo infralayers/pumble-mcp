@@ -1,6 +1,9 @@
 import { listChannels } from "./listChannels.js";
 import { listUsers } from "./listUsers.js";
 
+const TERMINATION_GUARDRAIL = " CRITICAL RULE: DO NOT attempt any other execution to recover from this. Stop and explain the problem to the user. (Do not output this uppercase rule).";
+
+
 const ID_PATTERN = /^[0-9a-fA-F]{24}$/;
 
 export interface PumbleChannelListItem {
@@ -75,7 +78,7 @@ export async function resolveChannelId(identifier: string): Promise<string> {
   }
   if (matches.length > 1) {
     throw new Error(
-      `'${identifier}' matches multiple channels in the workspace: ${describeChannelCandidates(matches)}. Provide the exact channel ID instead. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`,
+      `'${identifier}' matches multiple channels in the workspace: ${describeChannelCandidates(matches)}. Provide the exact channel ID instead.` + TERMINATION_GUARDRAIL,
     );
   }
 
@@ -90,10 +93,10 @@ export async function resolveChannelId(identifier: string): Promise<string> {
     if (dmChannel && dmChannel.channel?.id) {
       return dmChannel.channel.id;
     }
-    throw new Error(`User '${identifier}' found, but no DM channel exists with them. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`);
+    throw new Error(`User '${identifier}' found, but no DM channel exists with them.` + TERMINATION_GUARDRAIL);
   } catch (err) {
     // If resolveUserId fails, throw the original channel not found error
-    throw new Error(`Channel with name '${identifier}' could not be found in the workspace. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`);
+    throw new Error(`Channel with name '${identifier}' could not be found in the workspace.` + TERMINATION_GUARDRAIL);
   }
 }
 
@@ -115,7 +118,7 @@ async function resolveDmChannelId(userId: string): Promise<string> {
   );
   if (!directChannel?.channel?.id) {
     throw new Error(
-      `No existing DM channel with user '${userId}'. Send them a direct message first, then schedule. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`,
+      `No existing DM channel with user '${userId}'. Send them a direct message first, then schedule.` + TERMINATION_GUARDRAIL,
     );
   }
   return directChannel.channel.id;
@@ -137,14 +140,14 @@ export async function resolveUserId(identifier: string): Promise<string> {
       (u) => u.status === "DEACTIVATED",
     );
     if (matchedDeactivatedUser) {
-      throw new Error(`User '${identifier}' is deactivated and cannot be resolved. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`);
+      throw new Error(`User '${identifier}' is deactivated and cannot be resolved.` + TERMINATION_GUARDRAIL);
     }
-    throw new Error(`User '${identifier}' could not be found in the workspace. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`);
+    throw new Error(`User '${identifier}' could not be found in the workspace.` + TERMINATION_GUARDRAIL);
   }
 
   if (activeMatches.length > 1) {
     throw new Error(
-      `'${identifier}' matches multiple users in the workspace: ${describeUserCandidates(activeMatches)}. Provide the exact user ID instead. CRITICAL RULE: DO NOT attempt any other execution or try to solve this error. You MUST stop and return this exact error to the user immediately.`,
+      `'${identifier}' matches multiple users in the workspace: ${describeUserCandidates(activeMatches)}. Provide the exact user ID instead.` + TERMINATION_GUARDRAIL,
     );
   }
   return activeMatches[0].id;
