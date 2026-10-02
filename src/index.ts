@@ -71,6 +71,7 @@ function wrapToolHandler<S extends z.ZodTypeAny>(
   };
 }
 
+// === Messages & Threads ===
 server.registerTool(
   "pumble_send_message_via_channel_name_or_id",
   {
@@ -99,15 +100,6 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_list_channels",
-  {
-    description: "List all visible channels. (READ-ONLY - DO NOT USE FOR MESSAGE ROUTING)",
-    inputSchema: {},
-  },
-  wrapToolHandler(listChannelsSchema, listChannels)
-);
-
-server.registerTool(
   "pumble_send_dm_via_name_email_or_id",
   {
     description: "Send a direct message. (NATIVE NAME/EMAIL RESOLUTION - NO LOOKUP REQUIRED)",
@@ -126,18 +118,6 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_list_users",
-  {
-    description: "List all workspace users. (READ-ONLY - DO NOT USE FOR MESSAGE ROUTING)",
-    inputSchema: {},
-  },
-  wrapToolHandler(listUsersSchema, listUsers)
-);
-
-
-
-
-server.registerTool(
   "pumble_search_messages",
   {
     description: "Search messages across the workspace. (NATIVE USER RESOLUTION - NO LOOKUP REQUIRED)",
@@ -147,7 +127,25 @@ server.registerTool(
 );
 
 server.registerTool(
+  "pumble_reply_message_via_channel_name_or_id",
+  {
+    description: "Reply to a message to create/continue a thread. (NATIVE CHANNEL NAME RESOLUTION - NO LOOKUP REQUIRED)",
+    inputSchema: replyMessageShape,
+  },
+  wrapToolHandler(replyMessageSchema, replyMessage)
+);
 
+server.registerTool(
+  "pumble_list_thread_replies_via_channel_name_or_id",
+  {
+    description: "Fetch all replies for a thread. (NATIVE CHANNEL NAME RESOLUTION - NO LOOKUP REQUIRED)",
+    inputSchema: listThreadRepliesShape,
+  },
+  wrapToolHandler(listThreadRepliesSchema, listThreadReplies)
+);
+
+// === Reactions ===
+server.registerTool(
   "pumble_add_reaction",
   {
     description: "Add a reaction to a message. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
@@ -163,6 +161,16 @@ server.registerTool(
     inputSchema: removeReactionShape,
   },
   wrapToolHandler(removeReactionSchema, removeReaction)
+);
+
+// === Channels ===
+server.registerTool(
+  "pumble_list_channels",
+  {
+    description: "List all visible channels. (READ-ONLY - DO NOT USE FOR MESSAGE ROUTING)",
+    inputSchema: {},
+  },
+  wrapToolHandler(listChannelsSchema, listChannels)
 );
 
 server.registerTool(
@@ -202,24 +210,17 @@ server.registerTool(
   wrapToolHandler(removeUserFromChannelSchema, removeUserFromChannel)
 );
 
+// === Workspace & Users ===
 server.registerTool(
-  "pumble_reply_message_via_channel_name_or_id",
+  "pumble_list_users",
   {
-    description: "Reply to a message to create/continue a thread. (NATIVE CHANNEL NAME RESOLUTION - NO LOOKUP REQUIRED)",
-    inputSchema: replyMessageShape,
+    description: "List all workspace users. (READ-ONLY - DO NOT USE FOR MESSAGE ROUTING)",
+    inputSchema: {},
   },
-  wrapToolHandler(replyMessageSchema, replyMessage)
+  wrapToolHandler(listUsersSchema, listUsers)
 );
 
-server.registerTool(
-  "pumble_list_thread_replies_via_channel_name_or_id",
-  {
-    description: "Fetch all replies for a thread. (NATIVE CHANNEL NAME RESOLUTION - NO LOOKUP REQUIRED)",
-    inputSchema: listThreadRepliesShape,
-  },
-  wrapToolHandler(listThreadRepliesSchema, listThreadReplies)
-);
-
+// === Scheduled Messages ===
 server.registerTool(
   "pumble_list_scheduled_messages",
   {
