@@ -18,12 +18,12 @@ describe("addReaction", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await addReaction({ messageId: "m1", channelId: "c1", reaction: ":thumbsup:" });
+    await addReaction({ messageId: "m1", channelIdentifier: "507f1f77bcf86cd799439011", reaction: ":thumbsup:" });
 
     const [url, options] = fetchMock.mock.calls[0];
     expect(url.toString()).toBe("https://pumble-api-keys.addons.marketplace.cake.com/addReaction");
     expect(options.method).toBe("POST");
-    expect(JSON.parse(options.body)).toEqual({ messageId: "m1", channelId: "c1", reaction: ":thumbsup:" });
+    expect(JSON.parse(options.body)).toEqual({ messageId: "m1", channelId: "507f1f77bcf86cd799439011", reaction: ":thumbsup:" });
   });
 
   it("surfaces the error field verbatim on a 403 response", async () => {
@@ -35,7 +35,7 @@ describe("addReaction", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      addReaction({ messageId: "m1", channelId: "c1", reaction: ":thumbsup:" }),
+      addReaction({ messageId: "m1", channelIdentifier: "507f1f77bcf86cd799439011", reaction: ":thumbsup:" }),
     ).rejects.toThrow(/Invalid request parameters/);
   });
 });

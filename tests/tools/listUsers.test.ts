@@ -14,13 +14,13 @@ describe("listUsers", () => {
   it("calls GET /listUsers with no params", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      text: async () => JSON.stringify([{ id: "u1", name: "Jane" }]),
+      text: async () => JSON.stringify([{ id: "507f1f77bcf86cd799439021", name: "Jane" }]),
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await listUsers({});
 
-    expect(result).toEqual([{ id: "u1", name: "Jane" }]);
+    expect(result).toEqual([{ id: "507f1f77bcf86cd799439021", name: "Jane" }]);
     const [url, options] = fetchMock.mock.calls[0];
     expect(url.toString()).toBe("https://pumble-api-keys.addons.marketplace.cake.com/listUsers");
     expect(options.method).toBe("GET");
