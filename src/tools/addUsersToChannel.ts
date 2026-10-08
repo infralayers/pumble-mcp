@@ -12,13 +12,10 @@ export const addUsersToChannelSchema = z.object(addUsersToChannelShape);
 export type AddUsersToChannelInput = z.infer<typeof addUsersToChannelSchema>;
 
 export async function addUsersToChannel(input: AddUsersToChannelInput) {
-  const targetChannelId = await resolveChannelId(input.channelIdentifier);
-
-  const resolvedUserIds: string[] = [];
-  for (const identifier of input.userIdentifiers) {
-    const resolvedId = await resolveUserId(identifier);
-    resolvedUserIds.push(resolvedId);
-  }
+  const [targetChannelId, resolvedUserIds] = await Promise.all([
+    resolveChannelId(input.channelIdentifier),
+    Promise.all(input.userIdentifiers.map(id => resolveUserId(id)))
+  ]);
 
   return pumbleRequest<unknown>("/addUsersToChannel", {
     method: "POST",

@@ -95,13 +95,14 @@ describe("addUsersToChannel", () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Jordan Blake" }]) });
       return Promise.resolve({ ok: true, text: async () => "{}" });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = addUsersToChannelSchema.parse({
       channelIdentifier: "nonexistent-channel",
-      userIdentifiers: ["usr1"],
+      userIdentifiers: ["Jordan Blake"],
     });
 
     await expect(addUsersToChannel(input)).rejects.toThrow(/Channel with name 'nonexistent-channel' could not be found/);

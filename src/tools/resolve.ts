@@ -1,10 +1,45 @@
 import { listChannels } from "./listChannels.js";
 import { listUsers } from "./listUsers.js";
 
-const TERMINATION_GUARDRAIL = " CRITICAL RULE: DO NOT attempt any other execution to recover from this. Stop and explain the problem to the user. (Do not output this uppercase rule).";
+const TERMINATION_GUARDRAIL = " CRITICAL RULE: MUST NOT attempt any other execution to recover from this. Stop and explain the problem to the user. (Do not output this uppercase rule).";
 
 
 const ID_PATTERN = /^[0-9a-fA-F]{24}$/;
+
+// === SMART CACHE ===
+export let channelCache: PumbleChannelListItem[] | null = null;
+export let userCache: PumbleUser[] | null = null;
+
+export async function getChannelsList(forceRefresh = false): Promise<PumbleChannelListItem[]> {
+  if (channelCache && !forceRefresh) return channelCache;
+  const raw = await listChannels({});
+  channelCache = (raw as any[]).map((c) => ({
+    channel: { id: c.channel?.id, name: c.channel?.name, channelType: c.channel?.channelType },
+    users: c.users,
+  })) as PumbleChannelListItem[];
+  return channelCache;
+}
+
+export async function getUsersList(forceRefresh = false): Promise<PumbleUser[]> {
+  if (userCache && !forceRefresh) return userCache;
+  const raw = await listUsers({});
+  userCache = (raw as any[]).map((u) => ({
+    id: u.id, name: u.name, realName: u.realName, email: u.email, status: u.status,
+  })) as PumbleUser[];
+  return userCache;
+}
+
+export async function prefetchIdentifiers(): Promise<void> {
+  try {
+    await Promise.all([
+      getChannelsList(true),
+      getUsersList(true)
+    ]);
+  } catch (err) {
+    // Graceful degradation: cache stays null, system falls back to network on demand
+    console.error("Boot-time prefetch failed:", err);
+  }
+}
 
 export interface PumbleChannelListItem {
   channel?: {
@@ -70,8 +105,15 @@ export function describeUserCandidates(matches: PumbleUser[]): string {
 export async function resolveChannelId(identifier: string): Promise<string> {
   if (isLikelyId(identifier)) return identifier;
 
-  const channelsList = (await listChannels({})) as PumbleChannelListItem[];
-  const matches = matchChannelsByName(identifier, channelsList);
+  const wasCached = channelCache !== null;
+  let channelsList = await getChannelsList();
+  let matches = matchChannelsByName(identifier, channelsList);
+
+  if (matches.length === 0 && wasCached) {
+    // Smart Lookup: Cache miss. Re-fetch in case it's a brand new channel
+    channelsList = await getChannelsList(true);
+    matches = matchChannelsByName(identifier, channelsList);
+  }
 
   if (matches.length === 1) {
     return matches[0].channel!.id;
@@ -82,22 +124,7 @@ export async function resolveChannelId(identifier: string): Promise<string> {
     );
   }
 
-  // Phase 2: If no channel matches by name, try resolving it as a User to find their DM channel
-  try {
-    const userId = await resolveUserId(identifier);
-    // Find a DIRECT channel containing this user
-    const dmChannel = channelsList.find(c => 
-      c.channel?.channelType === "DIRECT" && 
-      c.users?.includes(userId)
-    );
-    if (dmChannel && dmChannel.channel?.id) {
-      return dmChannel.channel.id;
-    }
-    throw new Error(`User '${identifier}' found, but no DM channel exists with them.` + TERMINATION_GUARDRAIL);
-  } catch (err) {
-    // If resolveUserId fails, throw the original channel not found error
-    throw new Error(`Channel with name '${identifier}' could not be found in the workspace.` + TERMINATION_GUARDRAIL);
-  }
+  throw new Error(`Channel with name '${identifier}' could not be found in the workspace.` + TERMINATION_GUARDRAIL);
 }
 
 /**
@@ -105,23 +132,30 @@ export async function resolveChannelId(identifier: string): Promise<string> {
  * creates a DM channel once a message has been sent, so there is nothing to
  * target for someone the workspace has never messaged.
  */
-async function resolveDmChannelId(userId: string): Promise<string> {
-  const channelsList = (await listChannels({})) as PumbleChannelListItem[];
+export async function resolveDmChannelId(userId: string): Promise<string> {
+  const wasCached = channelCache !== null;
+  let channelsList = await getChannelsList();
 
-  const selfChannel = channelsList.find((c) => c.channel?.channelType === "SELF");
-  if (selfChannel?.channel?.id && selfChannel.users?.[0] === userId) {
-    return selfChannel.channel.id;
+  const findDm = (channels: PumbleChannelListItem[]) => {
+    const selfChannel = channels.find((c) => c.channel?.channelType === "SELF");
+    if (selfChannel?.channel?.id && selfChannel.users?.[0] === userId) return selfChannel.channel.id;
+    const directChannel = channels.find((c) => c.channel?.channelType === "DIRECT" && c.users?.includes(userId));
+    return directChannel?.channel?.id;
+  };
+
+  let dmId = findDm(channelsList);
+  if (!dmId && wasCached) {
+    // Smart Lookup: Cache miss. Re-fetch in case DM was just created
+    channelsList = await getChannelsList(true);
+    dmId = findDm(channelsList);
   }
 
-  const directChannel = channelsList.find(
-    (c) => c.channel?.channelType === "DIRECT" && c.users?.includes(userId),
-  );
-  if (!directChannel?.channel?.id) {
+  if (!dmId) {
     throw new Error(
       `No existing DM channel with user '${userId}'. Send them a direct message first, then schedule.` + TERMINATION_GUARDRAIL,
     );
   }
-  return directChannel.channel.id;
+  return dmId;
 }
 
 /**
@@ -131,9 +165,17 @@ async function resolveDmChannelId(userId: string): Promise<string> {
 export async function resolveUserId(identifier: string): Promise<string> {
   if (isLikelyId(identifier)) return identifier;
 
-  const usersList = (await listUsers({})) as PumbleUser[];
-  const activeUsersList = usersList.filter((u) => u.status !== "DEACTIVATED");
-  const activeMatches = matchUsersByNameOrEmail(identifier, activeUsersList);
+  const wasCached = userCache !== null;
+  let usersList = await getUsersList();
+  let activeUsersList = usersList.filter((u) => u.status !== "DEACTIVATED");
+  let activeMatches = matchUsersByNameOrEmail(identifier, activeUsersList);
+
+  if (activeMatches.length === 0 && wasCached) {
+    // Smart Lookup: Cache miss. Re-fetch in case it's a new user
+    usersList = await getUsersList(true);
+    activeUsersList = usersList.filter((u) => u.status !== "DEACTIVATED");
+    activeMatches = matchUsersByNameOrEmail(identifier, activeUsersList);
+  }
 
   if (activeMatches.length === 0) {
     const matchedDeactivatedUser = matchUsersByNameOrEmail(identifier, usersList).some(
@@ -153,25 +195,8 @@ export async function resolveUserId(identifier: string): Promise<string> {
   return activeMatches[0].id;
 }
 
-export interface ChannelDestination {
-  channel?: string;
-  channelId?: string;
-  userId?: string;
-  email?: string;
+export function clearCache() {
+  channelCache = null;
+  userCache = null;
 }
 
-/**
- * Resolve whichever destination field the caller supplied down to a channel ID.
- * The scheduled-message endpoints only accept `channelId`, so every other way
- * of naming a destination has to be looked up first. Returns undefined when no
- * destination was given at all.
- */
-export async function resolveDestinationChannelId(
-  destination: ChannelDestination,
-): Promise<string | undefined> {
-  if (destination.channelId) return destination.channelId;
-  if (destination.channel) return resolveChannelId(destination.channel);
-
-  const userId = destination.email ? await resolveUserId(destination.email) : destination.userId;
-  return userId ? resolveDmChannelId(userId) : undefined;
-}

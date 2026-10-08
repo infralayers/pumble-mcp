@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { getScheduledMessage, getScheduledMessageSchema, getScheduledMessageShape } from "./tools/getScheduledMessage.js";
+import { prefetchIdentifiers } from "./tools/resolve.js";
 
 import { sendMessage, sendMessageSchema, sendMessageShape } from "./tools/sendMessage.js";
 import { listMessages, listMessagesSchema, listMessagesShape } from "./tools/listMessages.js";
@@ -231,7 +232,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_create_scheduled_message",
+  "pumble_create_scheduled_message_via_name_or_id",
   {
     description: "Schedule a message for the future. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: createScheduledMessageShape,
@@ -240,7 +241,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_edit_scheduled_message",
+  "pumble_edit_scheduled_message_via_name_or_id",
   {
     description: "Edit a scheduled message. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: editScheduledMessageShape,
@@ -249,7 +250,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_delete_scheduled_message",
+  "pumble_delete_scheduled_message_via_name_or_id",
   {
     description: "Delete a scheduled message. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: deleteScheduledMessageShape,
@@ -258,12 +259,15 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_get_scheduled_message",
+  "pumble_get_scheduled_message_via_name_or_id",
   {
     description: "Fetch a scheduled message. (READ-ONLY)",
     inputSchema: getScheduledMessageShape,
   },
   wrapToolHandler(getScheduledMessageSchema, getScheduledMessage)
 );
+// Kick off prefetch asynchronously so it doesn't block the client handshake
+prefetchIdentifiers().catch(err => console.error("Prefetch failed:", err));
+
 const transport = new StdioServerTransport();
 await server.connect(transport);

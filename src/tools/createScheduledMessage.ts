@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
-import { listChannels } from "./listChannels.js";
-import { resolveChannelId, resolveUserId } from "./resolve.js";
+import { resolveChannelId, resolveUserId, resolveDmChannelId } from "./resolve.js";
 
 export const createScheduledMessageShape = {
   channelIdentifier: z.string().optional().describe("Channel name or ID (provide this OR userIdentifier). (Do not guess)"),
@@ -28,24 +27,7 @@ async function resolveScheduledMessageChannelId(input: CreateScheduledMessageInp
 
   if (input.userIdentifier) {
     const targetUserId = await resolveUserId(input.userIdentifier);
-
-    const channels = (await listChannels({})) as any[];
-    const selfChannel = channels.find((c) => c.channel?.channelType === "SELF");
-    const currentUserId = selfChannel?.users?.[0];
-
-    if (currentUserId && targetUserId === currentUserId) {
-      if (selfChannel?.channel?.id) return selfChannel.channel.id;
-    }
-
-    const directChannel = channels.find(
-      (c) =>
-        c.channel?.channelType === "DIRECT" &&
-        c.users?.includes(targetUserId)
-    );
-    if (directChannel?.channel?.id) {
-      return directChannel.channel.id;
-    }
-    throw new Error(`DM channel not found for user: ${targetUserId}`);
+    return resolveDmChannelId(targetUserId);
   }
 
   throw new Error("No target destination provided");

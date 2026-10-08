@@ -14,12 +14,9 @@ export const sendGroupDmSchema = z.object(sendGroupDmShape);
 export type SendGroupDmInput = z.infer<typeof sendGroupDmSchema>;
 
 export async function sendGroupDm(input: SendGroupDmInput) {
-  let finalUserIds: string[] = [];
-
-  for (const target of input.userIdentifiers) {
-    const resolvedId = await resolveUserId(target);
-    finalUserIds.push(resolvedId);
-  }
+  let finalUserIds = await Promise.all(
+    input.userIdentifiers.map(id => resolveUserId(id))
+  );
 
   // Deduplicate IDs
   finalUserIds = Array.from(new Set(finalUserIds));

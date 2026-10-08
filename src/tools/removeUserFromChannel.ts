@@ -16,8 +16,10 @@ export const removeUserFromChannelSchema = z.object(removeUserFromChannelShape);
 export type RemoveUserFromChannelInput = z.infer<typeof removeUserFromChannelSchema>;
 
 export async function removeUserFromChannel(input: RemoveUserFromChannelInput) {
-  const targetChannelId = await resolveChannelId(input.channelIdentifier);
-  const resolvedUserId = await resolveUserId(input.userIdentifier);
+  const [targetChannelId, resolvedUserId] = await Promise.all([
+    resolveChannelId(input.channelIdentifier),
+    resolveUserId(input.userIdentifier)
+  ]);
 
   try {
     return await pumbleRequest<unknown>("/removeUserFromChannel", {

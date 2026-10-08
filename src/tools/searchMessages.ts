@@ -18,22 +18,14 @@ export const searchMessagesSchema = z.object(searchMessagesShape).refine(
 export type SearchMessagesInput = z.infer<typeof searchMessagesSchema>;
 
 export async function searchMessages(input: SearchMessagesInput) {
-  let resolvedFrom: string[] | undefined = undefined;
-  let resolvedIn: string[] | undefined = undefined;
-
-  if (input.fromUserIdentifiers && input.fromUserIdentifiers.length > 0) {
-    resolvedFrom = [];
-    for (const identifier of input.fromUserIdentifiers) {
-      resolvedFrom.push(await resolveUserId(identifier));
-    }
-  }
-
-  if (input.inChannelIdentifiers && input.inChannelIdentifiers.length > 0) {
-    resolvedIn = [];
-    for (const identifier of input.inChannelIdentifiers) {
-      resolvedIn.push(await resolveChannelId(identifier));
-    }
-  }
+  const [resolvedFrom, resolvedIn] = await Promise.all([
+    input.fromUserIdentifiers && input.fromUserIdentifiers.length > 0
+      ? Promise.all(input.fromUserIdentifiers.map(id => resolveUserId(id)))
+      : Promise.resolve(undefined),
+    input.inChannelIdentifiers && input.inChannelIdentifiers.length > 0
+      ? Promise.all(input.inChannelIdentifiers.map(id => resolveChannelId(id)))
+      : Promise.resolve(undefined)
+  ]);
 
   const result = await pumbleRequest<any>("/searchMessages", {
     method: "POST",

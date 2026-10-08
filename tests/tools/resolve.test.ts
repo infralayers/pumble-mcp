@@ -125,4 +125,45 @@ describe("resolveChannelId / resolveUserId", () => {
 
     await expect(resolveChannelId("general")).resolves.toBe("c1");
   });
+
+  it("resolves from cache on second call (Cache Hit)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify([{ channel: { id: "c_cache", name: "cache-test" } }]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    // Call 1: Misses cache, fetches from network
+    await expect(resolveChannelId("cache-test")).resolves.toBe("c_cache");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Call 2: Hits cache, no network fetch
+    await expect(resolveChannelId("cache-test")).resolves.toBe("c_cache");
+    expect(fetchMock).toHaveBeenCalledTimes(1); // Still 1!
+  });
+
+  it("forces a network fetch on Cache Miss for a new channel", async () => {
+    // Setup a cache with some other channel first
+    let fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify([{ channel: { id: "c_old", name: "old-channel" } }]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await resolveChannelId("old-channel"); // populates cache
+    
+    // Now look for a brand new channel not in cache
+    // Mock the fetch to now return the new channel
+    fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify([
+         { channel: { id: "c_old", name: "old-channel" } },
+         { channel: { id: "c_new", name: "new-channel" } }
+      ]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    // Call: Misses cache, falls back to network, finds it!
+    await expect(resolveChannelId("new-channel")).resolves.toBe("c_new");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
