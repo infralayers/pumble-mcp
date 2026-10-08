@@ -1,10 +1,15 @@
+import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
 
-/**
- * Used by editScheduledMessage, and deliberately not registered as a tool:
- * `pumble_list_scheduled_messages` already returns whole messages.
- */
-export async function getScheduledMessage(input: { scheduledMessageId: string }) {
+export const getScheduledMessageShape = {
+  scheduledMessageId: z.string().min(1).describe("The exact ID of the scheduled message to retrieve. If unknown, use listScheduledMessages to find it first. (Do not guess)"),
+};
+
+export const getScheduledMessageSchema = z.object(getScheduledMessageShape);
+
+export type GetScheduledMessageInput = z.infer<typeof getScheduledMessageSchema>;
+
+export async function getScheduledMessage(input: GetScheduledMessageInput) {
   return pumbleRequest<unknown>("/fetchScheduledMessage", {
     method: "GET",
     query: {
