@@ -22,12 +22,12 @@ export const createScheduledMessageSchema = z
 export type CreateScheduledMessageInput = z.infer<typeof createScheduledMessageSchema>;
 
 /** Accept either an epoch timestamp or anything `Date` can parse, e.g. an ISO string. */
-export function toEpochMs(sendAt: string | number): number {
-  if (typeof sendAt === "number") return sendAt;
+export function toEpochMs(value: string | number, fieldName = "sendAt"): number {
+  if (typeof value === "number") return value;
 
-  const parsed = new Date(sendAt).getTime();
+  const parsed = new Date(value).getTime();
   if (isNaN(parsed)) {
-    throw new Error(`Invalid date format for sendAt: ${sendAt}`);
+    throw new Error(`Invalid date format for ${fieldName}: ${value}`);
   }
   return parsed;
 }
