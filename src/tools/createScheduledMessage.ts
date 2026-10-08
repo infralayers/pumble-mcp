@@ -21,6 +21,17 @@ export const createScheduledMessageSchema = z
 
 export type CreateScheduledMessageInput = z.infer<typeof createScheduledMessageSchema>;
 
+/** Accept either an epoch timestamp or anything `Date` can parse, e.g. an ISO string. */
+export function toEpochMs(value: string | number, fieldName = "sendAt"): number {
+  if (typeof value === "number") return value;
+
+  const parsed = new Date(value).getTime();
+  if (isNaN(parsed)) {
+    throw new Error(`Invalid date format for ${fieldName}: ${value}`);
+  }
+  return parsed;
+}
+
 async function resolveScheduledMessageChannelId(input: CreateScheduledMessageInput): Promise<string> {
   if (input.channelIdentifier) {
     return resolveChannelId(input.channelIdentifier);
@@ -52,16 +63,7 @@ async function resolveScheduledMessageChannelId(input: CreateScheduledMessageInp
 }
 
 export async function createScheduledMessage(input: CreateScheduledMessageInput) {
-  let sendAtMs: number;
-  if (typeof input.sendAt === "number") {
-    sendAtMs = input.sendAt;
-  } else {
-    const parsed = new Date(input.sendAt).getTime();
-    if (isNaN(parsed)) {
-      throw new Error(`Invalid date format for sendAt: ${input.sendAt}`);
-    }
-    sendAtMs = parsed;
-  }
+  const sendAtMs = toEpochMs(input.sendAt, "sendAt");
 
   const channelId = await resolveScheduledMessageChannelId(input);
 

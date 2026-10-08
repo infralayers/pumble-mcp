@@ -24,6 +24,9 @@ import { listScheduledMessages, listScheduledMessagesSchema, listScheduledMessag
 import { createScheduledMessage, createScheduledMessageSchema, createScheduledMessageShape } from "./tools/createScheduledMessage.js";
 import { editScheduledMessage, editScheduledMessageSchema, editScheduledMessageShape } from "./tools/editScheduledMessage.js";
 import { deleteScheduledMessage, deleteScheduledMessageSchema, deleteScheduledMessageShape } from "./tools/deleteScheduledMessage.js";
+import { getMyInfo, getMyInfoSchema, getMyInfoShape } from "./tools/getMyInfo.js";
+import { listUserGroups, listUserGroupsSchema, listUserGroupsShape } from "./tools/listUserGroups.js";
+import { updateCustomStatus, updateCustomStatusSchema, updateCustomStatusShape } from "./tools/updateCustomStatus.js";
 
 if (!process.env.PUMBLE_API_KEY) {
   console.error("PUMBLE_API_KEY environment variable is not set");
@@ -115,6 +118,33 @@ server.registerTool(
     inputSchema: sendGroupDmShape,
   },
   wrapToolHandler(sendGroupDmSchema, sendGroupDm)
+);
+
+server.registerTool(
+  "pumble_get_my_info",
+  {
+    description: "Get profile information about the current authenticated user.",
+    inputSchema: getMyInfoShape,
+  },
+  wrapToolHandler(getMyInfoSchema, getMyInfo)
+);
+
+server.registerTool(
+  "pumble_list_user_groups",
+  {
+    description: "List all user groups in the workspace.",
+    inputSchema: listUserGroupsShape,
+  },
+  wrapToolHandler(listUserGroupsSchema, listUserGroups)
+);
+
+server.registerTool(
+  "pumble_update_custom_status",
+  {
+    description: "Update the custom status of the authenticated user.",
+    inputSchema: updateCustomStatusShape,
+  },
+  wrapToolHandler(updateCustomStatusSchema, updateCustomStatus)
 );
 
 server.registerTool(
