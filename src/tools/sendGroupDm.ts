@@ -5,11 +5,15 @@ import { resolveUserId } from "./resolve.js";
 
 
 export const sendGroupDmShape = {
-  userIdentifiers: z.array(z.string().describe("Array of recipient user names, emails, or IDs. Minimum 2, maximum 8 recipients. (Do not guess)")).min(2).max(8),
-  text: z.string().min(1).describe("The message text to send. (Do not guess)"),
+  userIdentifiers: z
+    .array(z.string().describe("Recipient user name, email, or ID. If not provided, MUST ASK. DO NOT GUESS."))
+    .min(2)
+    .max(8)
+    .describe("Array of recipient user names, emails, or IDs (min 2, max 8). If not provided, MUST ASK. DO NOT GUESS."),
+  text: z.string().min(1).max(4000).describe("The message text to send (max 4000 characters). If not provided, MUST ASK. DO NOT GUESS."),
 };
 
-export const sendGroupDmSchema = z.object(sendGroupDmShape);
+export const sendGroupDmSchema = z.object(sendGroupDmShape).strict();
 
 export type SendGroupDmInput = z.infer<typeof sendGroupDmSchema>;
 

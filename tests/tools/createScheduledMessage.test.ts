@@ -52,6 +52,7 @@ describe("createScheduledMessage", () => {
   });
 
   it("resolves channel name and calls API successfully", async () => {
+    const futureSendAt = Date.now() + 100000;
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "general" } }]) });
@@ -62,7 +63,7 @@ describe("createScheduledMessage", () => {
     const input = createScheduledMessageSchema.parse({
       channelIdentifier: "general",
       text: "hello",
-      sendAt: 1784620000000,
+      sendAt: futureSendAt,
     });
     const result = await createScheduledMessage(input);
 
@@ -72,10 +73,11 @@ describe("createScheduledMessage", () => {
     const body = JSON.parse(apiCall[1].body);
     expect(body.channelId).toBe("chan1");
     expect(body.text).toBe("hello");
-    expect(body.sendAt).toBe(1784620000000);
+    expect(body.sendAt).toBe(futureSendAt);
   });
 
   it("resolves userIdentifier if provided", async () => {
+    const futureSendAt = Date.now() + 100000;
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan-dm", channelType: "DIRECT" }, users: ["usr1"] }]) });
@@ -87,7 +89,7 @@ describe("createScheduledMessage", () => {
     const input = createScheduledMessageSchema.parse({
       userIdentifier: "sam@example.com",
       text: "hello",
-      sendAt: 1784620000000,
+      sendAt: futureSendAt,
     });
     await createScheduledMessage(input);
 
@@ -97,6 +99,7 @@ describe("createScheduledMessage", () => {
   });
 
   it("throws if channel not found", async () => {
+    const futureSendAt = Date.now() + 100000;
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "general" } }]) });
@@ -107,8 +110,37 @@ describe("createScheduledMessage", () => {
     const input = createScheduledMessageSchema.parse({
       channelIdentifier: "nonexistent",
       text: "hello",
-      sendAt: 1784620000000,
+      sendAt: futureSendAt,
     });
     await expect(createScheduledMessage(input)).rejects.toThrow(/Channel with name 'nonexistent' could not be found/);
+  });
+
+  it("throws clear error when sendAt is in the past", async () => {
+    const input = createScheduledMessageSchema.parse({
+      channelIdentifier: "general",
+      text: "hello",
+      sendAt: Date.now() - 10000, // 10s in past
+    });
+    await expect(createScheduledMessage(input)).rejects.toThrow(/sendAt must be a timestamp at least 30 seconds in the future/);
+  });
+
+  it("throws canonical error when no DM conversation exists with user", async () => {
+    const futureSendAt = Date.now() + 100000;
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "u_new", email: "newuser@example.com" }]) });
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = createScheduledMessageSchema.parse({
+      userIdentifier: "newuser@example.com",
+      text: "hello",
+      sendAt: futureSendAt,
+    });
+    await expect(createScheduledMessage(input)).rejects.toThrow(
+      /Cannot schedule DM to user 'newuser@example.com': No direct conversation exists with this user yet/
+    );
   });
 });

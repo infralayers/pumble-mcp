@@ -4,14 +4,15 @@ import { listChannels } from "./listChannels.js";
 import { resolveChannelId, resolveUserId } from "./resolve.js";
 
 export const listScheduledMessagesShape = {
-  channelIdentifier: z.string().optional().describe("Channel name or ID to filter scheduled messages (provide this OR userIdentifier). (Do not guess)"),
-  userIdentifier: z.string().optional().describe("Recipient's user name, email, or ID to filter DM scheduled messages (provide this OR channelIdentifier). (Do not guess)"),
-  cursor: z.string().optional().describe("Optional pagination cursor for fetching next page of scheduled messages (Do not guess)"),
-  limit: z.number().int().positive().optional().describe("Maximum number of scheduled messages to fetch (Do not guess)"),
+  channelIdentifier: z.string().optional().describe("Channel name, slug, or ID to filter scheduled messages (provide this OR userIdentifier). If not provided, DO NOT GUESS."),
+  userIdentifier: z.string().optional().describe("Recipient user name, email, or ID to filter DM scheduled messages (provide this OR channelIdentifier). If not provided, DO NOT GUESS."),
+  cursor: z.string().optional().describe("Pagination cursor for fetching next page."),
+  limit: z.number().int().positive().optional().describe("Maximum number of scheduled messages to fetch."),
 };
 
 export const listScheduledMessagesSchema = z
   .object(listScheduledMessagesShape)
+  .strict()
   .refine(
     (v) => !(v.channelIdentifier && v.userIdentifier),
     {

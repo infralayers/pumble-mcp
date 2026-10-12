@@ -5,15 +5,16 @@ import { resolveChannelId, resolveUserId } from "./resolve.js";
 import { getScheduledMessage } from "./getScheduledMessage.js";
 
 export const editScheduledMessageShape = {
-  scheduledMessageId: z.string().describe("The ID of the scheduled message to edit (Do not guess)"),
-  channelIdentifier: z.string().optional().describe("Channel name or ID to move scheduled message to (provide this OR userIdentifier). (Do not guess)"),
-  userIdentifier: z.string().optional().describe("Recipient's user name, email, or ID to move scheduled message to a DM (provide this OR channelIdentifier). (Do not guess)"),
-  text: z.string().min(1).optional().describe("New text for the scheduled message (Do not guess)"),
-  sendAt: z.union([z.string(), z.number()]).optional().describe("New time to send message (ISO date string or epoch timestamp in milliseconds) (Do not guess)"),
+  scheduledMessageId: z.string().describe("The ID of the scheduled message to edit. If unknown, use pumble_list_scheduled_messages first. (Do not guess)"),
+  channelIdentifier: z.string().optional().describe("Channel name, slug, or ID to move scheduled message to (provide this OR userIdentifier). If not provided, DO NOT GUESS."),
+  userIdentifier: z.string().optional().describe("Recipient user name, email, or ID to move scheduled message to a DM (provide this OR channelIdentifier). If not provided, DO NOT GUESS."),
+  text: z.string().min(1).max(4000).optional().describe("New text for the scheduled message (max 4000 characters). If not provided, DO NOT GUESS."),
+  sendAt: z.union([z.string(), z.number()]).optional().describe("New time to send message (ISO date string or epoch timestamp in milliseconds at least 30s in future). If not provided, DO NOT GUESS."),
 };
 
 export const editScheduledMessageSchema = z
   .object(editScheduledMessageShape)
+  .strict()
   .refine(
     (v) => !(v.channelIdentifier && v.userIdentifier),
     {

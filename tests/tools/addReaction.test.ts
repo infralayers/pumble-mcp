@@ -38,4 +38,31 @@ describe("addReaction", () => {
       addReaction({ messageId: "m1", channelIdentifier: "507f1f77bcf86cd799439011", reaction: ":thumbsup:" }),
     ).rejects.toThrow(/Invalid request parameters/);
   });
+
+  it("validates reaction format and rejects sentences with spaces", async () => {
+    const { addReactionSchema } = await import("../../src/tools/addReaction.js");
+    expect(addReactionSchema.safeParse({
+      messageId: "m1",
+      channelIdentifier: "c1",
+      reaction: "I really like this update",
+    }).success).toBe(false);
+
+    expect(addReactionSchema.safeParse({
+      messageId: "m1",
+      channelIdentifier: "c1",
+      reaction: ":thumbsup:",
+    }).success).toBe(true);
+
+    expect(addReactionSchema.safeParse({
+      messageId: "m1",
+      channelIdentifier: "c1",
+      reaction: "thumbsup",
+    }).success).toBe(true);
+
+    expect(addReactionSchema.safeParse({
+      messageId: "m1",
+      channelIdentifier: "c1",
+      reaction: "+1",
+    }).success).toBe(true);
+  });
 });

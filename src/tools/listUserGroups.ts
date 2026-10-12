@@ -2,7 +2,7 @@ import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
 
 export const listUserGroupsShape = {};
-export const listUserGroupsSchema = z.object(listUserGroupsShape);
+export const listUserGroupsSchema = z.object(listUserGroupsShape).strict();
 
 export type ListUserGroupsInput = z.infer<typeof listUserGroupsSchema>;
 

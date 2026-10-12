@@ -1,8 +1,6 @@
 import { listChannels } from "./listChannels.js";
 import { listUsers } from "./listUsers.js";
 
-const TERMINATION_GUARDRAIL = " CRITICAL RULE: DO NOT attempt any other execution to recover from this. Stop and explain the problem to the user. (Do not output this uppercase rule).";
-
 
 const ID_PATTERN = /^[0-9a-fA-F]{24}$/;
 
@@ -27,9 +25,45 @@ export function isLikelyId(identifier: string): boolean {
   return ID_PATTERN.test(identifier);
 }
 
+/** Normalizes a channel name by stripping leading '#' and mapping spaces, underscores, and multiple hyphens to a single hyphen */
+export function normalizeSlug(s?: string): string {
+  if (!s) return "";
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/^#+/, "")
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-");
+}
+
 export function matchChannelsByName(identifier: string, channelsList: PumbleChannelListItem[]): PumbleChannelListItem[] {
-  const lower = identifier.toLowerCase();
-  return channelsList.filter((c) => c.channel?.name?.toLowerCase() === lower);
+  const lower = identifier.trim().toLowerCase();
+  const stripped = lower.replace(/^#+/, "");
+
+  // Phase 1: Exact Match (case-insensitive, with or without leading '#')
+  const exactMatches = channelsList.filter((c) => {
+    const cName = c.channel?.name?.toLowerCase();
+    return cName === lower || cName === stripped;
+  });
+  if (exactMatches.length > 0) return exactMatches;
+
+  // Phase 2: Slug Match (space/hyphen/underscore normalized)
+  const targetSlug = normalizeSlug(identifier);
+  if (targetSlug) {
+    const slugMatches = channelsList.filter((c) => normalizeSlug(c.channel?.name) === targetSlug);
+    if (slugMatches.length > 0) return slugMatches;
+  }
+
+  // Phase 3: Substring Slug Match (if target has at least 3 characters)
+  if (targetSlug && targetSlug.length >= 3) {
+    const substringMatches = channelsList.filter((c) => {
+      const cSlug = normalizeSlug(c.channel?.name);
+      return cSlug.includes(targetSlug);
+    });
+    if (substringMatches.length > 0) return substringMatches;
+  }
+
+  return [];
 }
 
 /** Lowercases and strips whitespace, so "Bob Builder" and "bobbuilder" compare equal. */
@@ -78,7 +112,7 @@ export async function resolveChannelId(identifier: string): Promise<string> {
   }
   if (matches.length > 1) {
     throw new Error(
-      `'${identifier}' matches multiple channels in the workspace: ${describeChannelCandidates(matches)}. Provide the exact channel ID instead.` + TERMINATION_GUARDRAIL,
+      `'${identifier}' matches multiple channels in the workspace: ${describeChannelCandidates(matches)}. Provide the exact channel ID instead.`,
     );
   }
 
@@ -93,10 +127,14 @@ export async function resolveChannelId(identifier: string): Promise<string> {
     if (dmChannel && dmChannel.channel?.id) {
       return dmChannel.channel.id;
     }
-    throw new Error(`User '${identifier}' found, but no DM channel exists with them.` + TERMINATION_GUARDRAIL);
-  } catch (err) {
-    // If resolveUserId fails, throw the original channel not found error
-    throw new Error(`Channel with name '${identifier}' could not be found in the workspace.` + TERMINATION_GUARDRAIL);
+    throw new Error(`User '${identifier}' found, but no DM channel exists with them.`);
+  } catch (err: any) {
+    if (err?.message?.includes("no DM channel exists with them")) {
+      throw err;
+    }
+    const available = channelsList.map(c => `#${c.channel?.name}`).filter(Boolean).join(", ");
+    const hint = available ? ` Available channels: ${available}.` : "";
+    throw new Error(`Channel with name '${identifier}' could not be found in the workspace.${hint}`);
   }
 }
 
@@ -118,7 +156,7 @@ async function resolveDmChannelId(userId: string): Promise<string> {
   );
   if (!directChannel?.channel?.id) {
     throw new Error(
-      `No existing DM channel with user '${userId}'. Send them a direct message first, then schedule.` + TERMINATION_GUARDRAIL,
+      `No existing DM channel with user '${userId}'. Send them a direct message first, then schedule.`,
     );
   }
   return directChannel.channel.id;
@@ -140,14 +178,14 @@ export async function resolveUserId(identifier: string): Promise<string> {
       (u) => u.status === "DEACTIVATED",
     );
     if (matchedDeactivatedUser) {
-      throw new Error(`User '${identifier}' is deactivated and cannot be resolved.` + TERMINATION_GUARDRAIL);
+      throw new Error(`User '${identifier}' is deactivated and cannot be resolved.`);
     }
-    throw new Error(`User '${identifier}' could not be found in the workspace.` + TERMINATION_GUARDRAIL);
+    throw new Error(`User '${identifier}' could not be found in the workspace.`);
   }
 
   if (activeMatches.length > 1) {
     throw new Error(
-      `'${identifier}' matches multiple users in the workspace: ${describeUserCandidates(activeMatches)}. Provide the exact user ID instead.` + TERMINATION_GUARDRAIL,
+      `'${identifier}' matches multiple users in the workspace: ${describeUserCandidates(activeMatches)}. Provide the exact user ID instead.`,
     );
   }
   return activeMatches[0].id;

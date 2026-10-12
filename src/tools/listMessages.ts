@@ -3,12 +3,13 @@ import { pumbleRequest } from "../pumbleClient.js";
 import { resolveChannelId } from "./resolve.js";
 
 export const listMessagesShape = {
-  channelIdentifier: z.string().min(1).describe("The name or ID of the channel. (Do not guess)"),
-  cursor: z.string().optional().describe("Pagination cursor (Do not guess)"),
-  limit: z.number().int().positive().optional().describe("Max number of messages to fetch (Do not guess)"),
+  channelIdentifier: z.string().min(1).describe("Channel name, slug, or ID. If not provided, MUST ASK. DO NOT GUESS."),
+  cursor: z.string().optional().describe("Pagination cursor for next page."),
+  limit: z.number().int().positive().optional().describe("Max number of messages to fetch."),
+  confirmationToken: z.string().optional().describe("One-time security confirmation token authorized by the human user."),
 };
 
-export const listMessagesSchema = z.object(listMessagesShape);
+export const listMessagesSchema = z.object(listMessagesShape).strict();
 
 export type ListMessagesInput = z.infer<typeof listMessagesSchema>;
 

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
 
 export const getMyInfoShape = {};
-export const getMyInfoSchema = z.object(getMyInfoShape);
+export const getMyInfoSchema = z.object(getMyInfoShape).strict();
 
 export type GetMyInfoInput = z.infer<typeof getMyInfoSchema>;
 

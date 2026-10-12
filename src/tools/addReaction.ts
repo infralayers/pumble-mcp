@@ -4,11 +4,18 @@ import { resolveChannelId } from "./resolve.js";
 
 export const addReactionShape = {
   messageId: z.string().min(1).describe("The exact ID of the message to react to. If unknown, use pumble_search_messages to find it first. (Do not guess)"),
-  channelIdentifier: z.string().min(1).describe("The name or ID of the channel the message is in. (Do not guess)"),
-  reaction: z.string().min(1).describe("The emoji code (e.g., :thumbsup:). (Do not guess)"),
+  channelIdentifier: z.string().min(1).describe("Channel name, slug, or ID. If not provided, MUST ASK. DO NOT GUESS."),
+  reaction: z
+    .string()
+    .min(1)
+    .regex(
+      /^:?[a-zA-Z0-9_+-]+:?$/,
+      "Invalid reaction format. Must be an emoji shortcode (e.g., ':thumbsup:' or 'thumbsup') without spaces or conversational text."
+    )
+    .describe("The emoji code (e.g., :thumbsup:). Must be a single emoji code, no conversational text or spaces. (Do not guess)"),
 };
 
-export const addReactionSchema = z.object(addReactionShape);
+export const addReactionSchema = z.object(addReactionShape).strict();
 export type AddReactionInput = z.infer<typeof addReactionSchema>;
 
 export async function addReaction(input: AddReactionInput) {

@@ -4,11 +4,11 @@ import { resolveUserId } from "./resolve.js";
 import { listChannels } from "./listChannels.js";
 
 export const sendDmShape = {
-  userIdentifier: z.string().min(1).describe("The name, email, or ID of the user. (Do not guess)"),
-  text: z.string().min(1).describe("The message text to send. (Do not guess)"),
+  userIdentifier: z.string().min(1).describe("User name, email, or ID. If not provided, MUST ASK. DO NOT GUESS."),
+  text: z.string().min(1).max(4000).describe("The message text to send (max 4000 characters). If not provided, MUST ASK. DO NOT GUESS."),
 };
 
-export const sendDmSchema = z.object(sendDmShape);
+export const sendDmSchema = z.object(sendDmShape).strict();
 
 export type SendDmInput = z.infer<typeof sendDmSchema>;
 

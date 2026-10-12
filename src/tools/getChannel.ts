@@ -3,10 +3,10 @@ import { pumbleRequest } from "../pumbleClient.js";
 import { resolveChannelId } from "./resolve.js";
 
 export const getChannelShape = {
-  channelIdentifier: z.string().min(1).describe("The name or ID of the channel. (Do not guess)"),
+  channelIdentifier: z.string().min(1).describe("Channel name, slug, or ID. If not provided, MUST ASK. DO NOT GUESS."),
 };
 
-export const getChannelSchema = z.object(getChannelShape);
+export const getChannelSchema = z.object(getChannelShape).strict();
 
 export type GetChannelInput = z.infer<typeof getChannelSchema>;
 
