@@ -6,8 +6,12 @@ describe("createChannelSchema", () => {
     expect(createChannelSchema.safeParse({ type: "PUBLIC" }).success).toBe(false);
   });
 
-  it("rejects when type is missing", () => {
-    expect(createChannelSchema.safeParse({ name: "my-channel" }).success).toBe(false);
+  it("defaults type to PUBLIC when type is omitted", () => {
+    const res = createChannelSchema.safeParse({ name: "my-channel" });
+    expect(res.success).toBe(true);
+    if (res.success) {
+      expect(res.data.type).toBe("PUBLIC");
+    }
   });
 
   it("rejects when type is invalid", () => {

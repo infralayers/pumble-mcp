@@ -3,12 +3,12 @@ import { pumbleRequest } from "../pumbleClient.js";
 import { resolveChannelId } from "./resolve.js";
 
 export const sendMessageShape = {
-  channelIdentifier: z.string().min(1).describe("The name or ID of the channel. (Do not guess)"),
-  text: z.string().min(1).describe("The message text to send. (Do not guess)"),
-  asBot: z.boolean().default(false).describe("Send as the bot identity instead of the API key's user (Do not guess)"),
+  channelIdentifier: z.string().min(1).describe("Channel name, slug, or ID. If not provided, MUST ASK. DO NOT GUESS."),
+  text: z.string().min(1).max(4000).describe("The message text to send (max 4000 characters). If not provided, MUST ASK. DO NOT GUESS."),
+  asBot: z.boolean().default(false).describe("Send as bot identity instead of API key user. Defaults to false. If not provided, DO NOT GUESS."),
 };
 
-export const sendMessageSchema = z.object(sendMessageShape);
+export const sendMessageSchema = z.object(sendMessageShape).strict();
 
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 

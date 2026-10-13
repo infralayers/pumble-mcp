@@ -4,14 +4,15 @@ import { resolveChannelId, resolveUserId } from "./resolve.js";
 import { getChannel } from "./getChannel.js";
 
 export const removeUserFromChannelShape = {
-  channelIdentifier: z.string().min(1).describe("The name or ID of the channel. (Do not guess)"),
-  userIdentifier: z.string().min(1).describe("The name, email, or ID of the user to remove. (Do not guess)"),
+  channelIdentifier: z.string().min(1).describe("Channel name, slug, or ID. If not provided, MUST ASK. DO NOT GUESS."),
+  userIdentifier: z.string().min(1).describe("User name, email, or ID of the user to remove. If not provided, MUST ASK. DO NOT GUESS."),
   confirm: z.literal(true, {
     errorMap: () => ({ message: "You MUST explicitly set confirm: true to perform this destructive operation" })
   }).describe("Explicit confirmation boolean. Must be true. (Do not guess)"),
+  confirmationToken: z.string().optional().describe("One-time security confirmation token authorized by the human user."),
 };
 
-export const removeUserFromChannelSchema = z.object(removeUserFromChannelShape);
+export const removeUserFromChannelSchema = z.object(removeUserFromChannelShape).strict();
 
 export type RemoveUserFromChannelInput = z.infer<typeof removeUserFromChannelSchema>;
 

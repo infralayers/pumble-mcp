@@ -3,14 +3,17 @@ import { pumbleRequest } from "../pumbleClient.js";
 import { resolveChannelId, resolveUserId } from "./resolve.js";
 
 export const searchMessagesShape = {
-  text: z.string().optional().describe("Text to search for (Do not guess)"),
-  fromUserIdentifiers: z.union([z.string(), z.array(z.string())]).optional().transform(v => typeof v === 'string' ? [v] : v).describe("User names, emails, or IDs to search from. (Do not guess)"),
-  inChannelIdentifiers: z.union([z.string(), z.array(z.string())]).optional().transform(v => typeof v === 'string' ? [v] : v).describe("Channel names or IDs to search in. (Do not guess)"),
-  after: z.string().optional().describe("Required parameter to fetch recent messages (API defaults to oldest first). Must be a valid ISO 8601 date string. (Do not guess)"),
-  before: z.string().optional().describe("Filter messages before this date. Must be a valid ISO 8601 date string. (Do not guess)"),
+  text: z.string().optional().describe("Text query to search for. If not provided, DO NOT GUESS."),
+  fromUserIdentifiers: z.union([z.string(), z.array(z.string())]).optional().transform(v => typeof v === 'string' ? [v] : v).describe("User names, emails, or IDs to filter by. If not provided, DO NOT GUESS."),
+  inChannelIdentifiers: z.union([z.string(), z.array(z.string())]).optional().transform(v => typeof v === 'string' ? [v] : v).describe("Channel names, slugs, or IDs to filter by. If not provided, DO NOT GUESS."),
+  after: z.string().optional().describe("Filter messages after this date (ISO 8601 date string)."),
+  before: z.string().optional().describe("Filter messages before this date (ISO 8601 date string)."),
 };
 
-export const searchMessagesSchema = z.object(searchMessagesShape).refine(
+export const searchMessagesSchema = z
+  .object(searchMessagesShape)
+  .strict()
+  .refine(
   (data) => Boolean(data.text) || (data.fromUserIdentifiers && data.fromUserIdentifiers.length > 0) || (data.inChannelIdentifiers && data.inChannelIdentifiers.length > 0),
   { message: "At least one of 'text', 'fromUserIdentifiers', or 'inChannelIdentifiers' must be provided." }
 );
