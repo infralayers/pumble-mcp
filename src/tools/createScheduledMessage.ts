@@ -1,42 +1,85 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
-import { resolveDestinationChannelId } from "./resolve.js";
+import { listChannels } from "./listChannels.js";
+import { resolveChannelId, resolveUserId } from "./resolve.js";
 
 export const createScheduledMessageShape = {
-  channel: z.string().optional().describe("Channel name (provide this OR channelId, userId, or email)"),
-  channelId: z.string().optional().describe("Channel ID (provide this OR channel, userId, or email)"),
-  userId: z.string().optional().describe("Recipient's user ID for a Direct Message (provide this OR channel, channelId, or email)"),
-  email: z.string().optional().describe("Recipient's email for a Direct Message (provide this OR channel, channelId, or userId)"),
-  text: z.string().min(1).describe("The scheduled message text"),
-  sendAt: z
-    .union([z.string(), z.number()])
-    .describe("Time to send message (ISO date string or epoch timestamp in milliseconds)"),
+  channelIdentifier: z.string().optional().describe("Channel name, slug, or ID (provide this OR userIdentifier). If not provided, MUST ASK. DO NOT GUESS."),
+  userIdentifier: z.string().optional().describe("Recipient user name, email, or ID for a DM (provide this OR channelIdentifier). If not provided, MUST ASK. DO NOT GUESS."),
+  text: z.string().min(1).max(4000).describe("The scheduled message text (max 4000 characters). If not provided, MUST ASK. DO NOT GUESS."),
+  sendAt: z.union([z.string(), z.number()]).describe("Time to send message (ISO date string or epoch timestamp in milliseconds at least 30s in future). If not provided, MUST ASK. DO NOT GUESS."),
 };
 
 export const createScheduledMessageSchema = z
   .object(createScheduledMessageShape)
-  .refine((v) => [v.channel, v.channelId, v.userId, v.email].filter(Boolean).length === 1, {
-    message: "Provide exactly one of `channel`, `channelId`, `userId`, or `email`",
-  });
+  .strict()
+  .refine(
+    (v) => Boolean(v.channelIdentifier) !== Boolean(v.userIdentifier),
+    {
+      message: "Provide exactly one target filter: `channelIdentifier` or `userIdentifier`",
+    }
+  );
 
 export type CreateScheduledMessageInput = z.infer<typeof createScheduledMessageSchema>;
 
 /** Accept either an epoch timestamp or anything `Date` can parse, e.g. an ISO string. */
 export function toEpochMs(value: string | number, fieldName = "sendAt"): number {
-  if (typeof value === "number") return value;
-
-  const parsed = new Date(value).getTime();
+  const parsed = typeof value === "number" ? value : new Date(value).getTime();
   if (isNaN(parsed)) {
     throw new Error(`Invalid date format for ${fieldName}: ${value}`);
+  }
+  if (fieldName === "sendAt" && parsed < Date.now() + 30_000) {
+    throw new Error("sendAt must be a timestamp at least 30 seconds in the future.");
   }
   return parsed;
 }
 
+async function resolveScheduledMessageChannelId(input: CreateScheduledMessageInput): Promise<string> {
+  if (input.channelIdentifier) {
+    return resolveChannelId(input.channelIdentifier);
+  }
+
+  if (input.userIdentifier) {
+    const targetUserId = await resolveUserId(input.userIdentifier);
+
+    const channels = (await listChannels({})) as any[];
+    const selfChannel = channels.find((c) => c.channel?.channelType === "SELF");
+    const currentUserId = selfChannel?.users?.[0];
+
+    if (currentUserId && targetUserId === currentUserId) {
+      if (selfChannel?.channel?.id) return selfChannel.channel.id;
+    }
+
+    const directChannel = channels.find(
+      (c) =>
+        c.channel?.channelType === "DIRECT" &&
+        c.users?.includes(targetUserId)
+    );
+    if (directChannel?.channel?.id) {
+      return directChannel.channel.id;
+    }
+    throw new Error(
+      `Cannot schedule DM to user '${input.userIdentifier}': No direct conversation exists with this user yet. Please send a normal direct message first.`
+    );
+  }
+
+  throw new Error("No target destination provided");
+}
+
 export async function createScheduledMessage(input: CreateScheduledMessageInput) {
-  const channelId = await resolveDestinationChannelId(input);
+  const sendAtMs = toEpochMs(input.sendAt, "sendAt");
+
+  const channelId = await resolveScheduledMessageChannelId(input);
+
+  const body = {
+    text: input.text,
+    sendAt: sendAtMs,
+    channelId,
+  };
 
   return pumbleRequest<{ id: string; channelId: string }>("/createScheduledMessage", {
     method: "POST",
-    body: { text: input.text, sendAt: toEpochMs(input.sendAt), channelId },
+    body,
   });
 }
+

@@ -18,14 +18,14 @@ describe("removeReaction", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await removeReaction({ messageId: "m1", channelId: "c1", reaction: ":thumbsup:" });
+    await removeReaction({ messageId: "m1", channelIdentifier: "507f1f77bcf86cd799439011", reaction: ":thumbsup:" });
 
     const [url, options] = fetchMock.mock.calls[0];
     const urlObj = new URL(url);
     expect(urlObj.origin + urlObj.pathname).toBe("https://pumble-api-keys.addons.marketplace.cake.com/removeReaction");
     expect(options.method).toBe("DELETE");
     expect(urlObj.searchParams.get("messageId")).toBe("m1");
-    expect(urlObj.searchParams.get("channelId")).toBe("c1");
+    expect(urlObj.searchParams.get("channelId")).toBe("507f1f77bcf86cd799439011");
     expect(urlObj.searchParams.get("reaction")).toBe(":thumbsup:");
   });
 
@@ -38,7 +38,7 @@ describe("removeReaction", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      removeReaction({ messageId: "m1", channelId: "c1", reaction: ":thumbsup:" }),
+      removeReaction({ messageId: "m1", channelIdentifier: "507f1f77bcf86cd799439011", reaction: ":thumbsup:" }),
     ).rejects.toThrow(/Invalid request parameters/);
   });
 });

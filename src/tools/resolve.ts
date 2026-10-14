@@ -1,6 +1,7 @@
 import { listChannels } from "./listChannels.js";
 import { listUsers } from "./listUsers.js";
 
+
 const ID_PATTERN = /^[0-9a-fA-F]{24}$/;
 
 export interface PumbleChannelListItem {
@@ -24,9 +25,45 @@ export function isLikelyId(identifier: string): boolean {
   return ID_PATTERN.test(identifier);
 }
 
+/** Normalizes a channel name by stripping leading '#' and mapping spaces, underscores, and multiple hyphens to a single hyphen */
+export function normalizeSlug(s?: string): string {
+  if (!s) return "";
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/^#+/, "")
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-");
+}
+
 export function matchChannelsByName(identifier: string, channelsList: PumbleChannelListItem[]): PumbleChannelListItem[] {
-  const lower = identifier.toLowerCase();
-  return channelsList.filter((c) => c.channel?.name?.toLowerCase() === lower);
+  const lower = identifier.trim().toLowerCase();
+  const stripped = lower.replace(/^#+/, "");
+
+  // Phase 1: Exact Match (case-insensitive, with or without leading '#')
+  const exactMatches = channelsList.filter((c) => {
+    const cName = c.channel?.name?.toLowerCase();
+    return cName === lower || cName === stripped;
+  });
+  if (exactMatches.length > 0) return exactMatches;
+
+  // Phase 2: Slug Match (space/hyphen/underscore normalized)
+  const targetSlug = normalizeSlug(identifier);
+  if (targetSlug) {
+    const slugMatches = channelsList.filter((c) => normalizeSlug(c.channel?.name) === targetSlug);
+    if (slugMatches.length > 0) return slugMatches;
+  }
+
+  // Phase 3: Substring Slug Match (if target has at least 3 characters)
+  if (targetSlug && targetSlug.length >= 3) {
+    const substringMatches = channelsList.filter((c) => {
+      const cSlug = normalizeSlug(c.channel?.name);
+      return cSlug.includes(targetSlug);
+    });
+    if (substringMatches.length > 0) return substringMatches;
+  }
+
+  return [];
 }
 
 /** Lowercases and strips whitespace, so "Bob Builder" and "bobbuilder" compare equal. */
@@ -70,15 +107,35 @@ export async function resolveChannelId(identifier: string): Promise<string> {
   const channelsList = (await listChannels({})) as PumbleChannelListItem[];
   const matches = matchChannelsByName(identifier, channelsList);
 
-  if (matches.length === 0) {
-    throw new Error(`Channel with name '${identifier}' could not be found in the workspace.`);
+  if (matches.length === 1) {
+    return matches[0].channel!.id;
   }
   if (matches.length > 1) {
     throw new Error(
       `'${identifier}' matches multiple channels in the workspace: ${describeChannelCandidates(matches)}. Provide the exact channel ID instead.`,
     );
   }
-  return matches[0].channel!.id;
+
+  // Phase 2: If no channel matches by name, try resolving it as a User to find their DM channel
+  try {
+    const userId = await resolveUserId(identifier);
+    // Find a DIRECT channel containing this user
+    const dmChannel = channelsList.find(c => 
+      c.channel?.channelType === "DIRECT" && 
+      c.users?.includes(userId)
+    );
+    if (dmChannel && dmChannel.channel?.id) {
+      return dmChannel.channel.id;
+    }
+    throw new Error(`User '${identifier}' found, but no DM channel exists with them.`);
+  } catch (err: any) {
+    if (err?.message?.includes("no DM channel exists with them")) {
+      throw err;
+    }
+    const available = channelsList.map(c => `#${c.channel?.name}`).filter(Boolean).join(", ");
+    const hint = available ? ` Available channels: ${available}.` : "";
+    throw new Error(`Channel with name '${identifier}' could not be found in the workspace.${hint}`);
+  }
 }
 
 /**

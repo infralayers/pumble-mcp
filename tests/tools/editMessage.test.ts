@@ -18,11 +18,11 @@ describe("editMessage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await editMessage({ messageId: "m1", channelId: "c1", text: "updated" });
+    await editMessage({ messageId: "m1", channelIdentifier: "507f1f77bcf86cd799439011", text: "updated" });
 
     const [url, options] = fetchMock.mock.calls[0];
     expect(url.toString()).toBe("https://pumble-api-keys.addons.marketplace.cake.com/editMessage");
-    expect(JSON.parse(options.body)).toEqual({ messageId: "m1", channelId: "c1", text: "updated" });
+    expect(JSON.parse(options.body)).toEqual({ messageId: "m1", channelId: "507f1f77bcf86cd799439011", text: "updated" });
   });
 
   it("surfaces the error field verbatim on a 403 response", async () => {
@@ -34,7 +34,7 @@ describe("editMessage", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      editMessage({ messageId: "m1", channelId: "c1", text: "updated" }),
+      editMessage({ messageId: "m1", channelIdentifier: "507f1f77bcf86cd799439011", text: "updated" }),
     ).rejects.toThrow(/Invalid request parameters/);
   });
 });

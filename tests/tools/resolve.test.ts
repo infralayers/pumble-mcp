@@ -29,6 +29,25 @@ describe("matchChannelsByName / matchUsersByNameOrEmail", () => {
     expect(matchUsersByNameOrEmail("JORDAN@EXAMPLE.COM", users)).toHaveLength(1);
   });
 
+  it("matches channels with leading hash, spaces, underscores, and substrings", () => {
+    const channels = [
+      { channel: { id: "c1", name: "General" } },
+      { channel: { id: "c2", name: "office-work" } },
+      { channel: { id: "c3", name: "marketing-announcements" } },
+    ];
+    // Strips leading '#'
+    expect(matchChannelsByName("#general", channels)).toHaveLength(1);
+    expect(matchChannelsByName("#General", channels)).toHaveLength(1);
+
+    // Spaces and underscores normalize to hyphenated slug
+    expect(matchChannelsByName("office work", channels)).toHaveLength(1);
+    expect(matchChannelsByName("office_work", channels)).toHaveLength(1);
+    expect(matchChannelsByName("#office work", channels)).toHaveLength(1);
+
+    // Substring match
+    expect(matchChannelsByName("marketing", channels)).toHaveLength(1);
+  });
+
   it("returns every match when a name is ambiguous", () => {
     const users = [
       { id: "u1", name: "Casey Morgan", email: "casey.old@example.com" },
@@ -124,5 +143,21 @@ describe("resolveChannelId / resolveUserId", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(resolveChannelId("general")).resolves.toBe("c1");
+  });
+
+  it("resolveChannelId reports available channels on miss without prompt injections", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify([
+          { channel: { id: "c1", name: "office-work" } },
+          { channel: { id: "c2", name: "general" } },
+        ]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(resolveChannelId("home work")).rejects.toThrow(
+      "Channel with name 'home work' could not be found in the workspace. Available channels: #office-work, #general."
+    );
   });
 });

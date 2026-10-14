@@ -2,22 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getChannel, getChannelSchema } from "../../src/tools/getChannel.js";
 
 describe("getChannelSchema", () => {
-  it("rejects when neither channel nor channelId is given", () => {
+  it("rejects when channelIdentifier is missing", () => {
     expect(getChannelSchema.safeParse({}).success).toBe(false);
   });
 
-  it("rejects when both channel and channelId are given", () => {
-    expect(
-      getChannelSchema.safeParse({ channel: "general", channelId: "abc" }).success,
-    ).toBe(false);
-  });
-
-  it("accepts when only channelId is given", () => {
-    expect(getChannelSchema.safeParse({ channelId: "abc" }).success).toBe(true);
+    it("accepts when only channelId is given", () => {
+    expect(getChannelSchema.safeParse({ channelIdentifier: "507f1f77bcf86cd799439011" }).success).toBe(true);
   });
 
   it("accepts when only channel is given", () => {
-    expect(getChannelSchema.safeParse({ channel: "general" }).success).toBe(true);
+    expect(getChannelSchema.safeParse({ channelIdentifier: "general" }).success).toBe(true);
   });
 });
 
@@ -32,24 +26,34 @@ describe("getChannel", () => {
   });
 
   it("builds the query string correctly when given channelId", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => JSON.stringify({ id: "abc", name: "general" }),
-    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () => JSON.stringify({ id: "abc", name: "general", users: ["testuser1"] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () => JSON.stringify([{ id: "testuser1", name: "Test User", email: "test@example.com" }]),
+      });
     vi.stubGlobal("fetch", fetchMock);
 
-    const input = getChannelSchema.parse({ channelId: "abc" });
+    const input = getChannelSchema.parse({ channelIdentifier: "507f1f77bcf86cd799439011" });
     const result = await getChannel(input);
 
-    expect(result).toEqual({ id: "abc", name: "general" });
+    expect(result).toEqual({ 
+      id: "abc", 
+      name: "general", 
+      users: ["testuser1"], 
+      memberDetails: [{ id: "testuser1", name: "Test User", email: "test@example.com" }] 
+    });
+    
     const [url] = fetchMock.mock.calls[0];
     expect(url.toString()).toBe(
-      "https://pumble-api-keys.addons.marketplace.cake.com/getChannel?channelId=abc",
+      "https://pumble-api-keys.addons.marketplace.cake.com/getChannel?channelId=507f1f77bcf86cd799439011",
     );
   });
 
   it("resolves channel name to ID and calls the API", async () => {
-    // We mock fetch twice. The first one will be called by listChannels internally.
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
         ok: true,
@@ -60,16 +64,24 @@ describe("getChannel", () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        text: async () => JSON.stringify({ id: "def", name: "general" }),
+        text: async () => JSON.stringify({ id: "def", name: "general", users: ["testuser2"] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () => JSON.stringify([{ id: "testuser2", name: "Jane Doe", email: "jane@example.com" }]),
       });
     vi.stubGlobal("fetch", fetchMock);
 
-    const input = getChannelSchema.parse({ channel: "general" });
+    const input = getChannelSchema.parse({ channelIdentifier: "general" });
     const result = await getChannel(input);
 
-    expect(result).toEqual({ id: "def", name: "general" });
+    expect(result).toEqual({ 
+      id: "def", 
+      name: "general", 
+      users: ["testuser2"],
+      memberDetails: [{ id: "testuser2", name: "Jane Doe", email: "jane@example.com" }]
+    });
     
-    // Check the second fetch call url (first was listChannels)
     const [url] = fetchMock.mock.calls[1];
     expect(url.toString()).toBe(
       "https://pumble-api-keys.addons.marketplace.cake.com/getChannel?channelId=def",
@@ -83,7 +95,7 @@ describe("getChannel", () => {
       });
     vi.stubGlobal("fetch", fetchMock);
 
-    const input = getChannelSchema.parse({ channel: "nonexistent" });
+    const input = getChannelSchema.parse({ channelIdentifier: "nonexistent" });
     await expect(getChannel(input)).rejects.toThrow(/Channel with name 'nonexistent' could not be found/);
   });
 });

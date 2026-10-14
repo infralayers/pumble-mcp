@@ -17,7 +17,7 @@ export const updateCustomStatusShape = {
     ),
 };
 
-export const updateCustomStatusSchema = z.object(updateCustomStatusShape);
+export const updateCustomStatusSchema = z.object(updateCustomStatusShape).strict();
 
 export type UpdateCustomStatusInput = z.infer<typeof updateCustomStatusSchema>;
 

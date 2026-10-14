@@ -1,24 +1,25 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
+import { resolveChannelId } from "./resolve.js";
 
 export const sendMessageShape = {
-  channel: z.string().optional().describe("Channel name (provide this OR channelId)"),
-  channelId: z.string().optional().describe("Channel ID (provide this OR channel)"),
-  text: z.string().describe("The message text to send"),
-  asBot: z.boolean().default(false).describe("Send as the bot identity instead of the API key's user"),
+  channelIdentifier: z.string().min(1).describe("Channel name, slug, or ID. If not provided, MUST ASK. DO NOT GUESS."),
+  text: z.string().min(1).max(4000).describe("The message text to send (max 4000 characters). If not provided, MUST ASK. DO NOT GUESS."),
+  asBot: z.boolean().default(false).describe("Send as bot identity instead of API key user. Defaults to false. If not provided, DO NOT GUESS."),
 };
 
-export const sendMessageSchema = z
-  .object(sendMessageShape)
-  .refine((v) => Boolean(v.channel) !== Boolean(v.channelId), {
-    message: "Provide exactly one of `channel` or `channelId`",
-  });
+export const sendMessageSchema = z.object(sendMessageShape).strict();
 
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 
 export async function sendMessage(input: SendMessageInput) {
+  const channelId = await resolveChannelId(input.channelIdentifier);
   return pumbleRequest<{ id: string }>("/sendMessage", {
     method: "POST",
-    body: input,
+    body: {
+      channelId,
+      text: input.text,
+      asBot: input.asBot,
+    },
   });
 }
