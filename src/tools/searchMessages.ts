@@ -41,15 +41,31 @@ export async function searchMessages(input: SearchMessagesInput) {
     },
   });
 
-  // Client-side sorting: API returns sequential timestamps (oldest first).
-  // We reverse the array using descending sort to show newest items first.
+  const sanitizeItem = (m: any) => {
+    const item: any = { text: m.text };
+    if (m.id || m.messageId) {
+      item.id = m.id || m.messageId;
+      item.messageId = m.id || m.messageId;
+    }
+    if (m.channelId) item.channelId = m.channelId;
+    if (m.timestamp || m.timestampMilli) item.timestamp = m.timestamp || m.timestampMilli;
+    if (m.authorName || m.authorId || m.workspaceUserId) {
+      item.author = m.authorName || m.authorId || m.workspaceUserId;
+    }
+    return item;
+  };
+
+  // Client-side sorting and payload sanitization: newest first, capped to top 10
   if (result) {
     if (Array.isArray(result.content)) {
       result.content.sort((a: any, b: any) => (b.timestampMilli || 0) - (a.timestampMilli || 0));
+      result.content = result.content.slice(0, 10).map(sanitizeItem);
     } else if (Array.isArray(result)) {
       result.sort((a: any, b: any) => (b.timestampMilli || 0) - (a.timestampMilli || 0));
+      return result.slice(0, 10).map(sanitizeItem);
     } else if (result.messages && Array.isArray(result.messages)) {
       result.messages.sort((a: any, b: any) => (b.timestampMilli || 0) - (a.timestampMilli || 0));
+      result.messages = result.messages.slice(0, 10).map(sanitizeItem);
     }
   }
 

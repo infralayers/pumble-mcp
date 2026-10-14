@@ -67,7 +67,15 @@ describe("createScheduledMessage", () => {
     });
     const result = await createScheduledMessage(input);
 
-    expect(result).toEqual({ success: true, message: { id: "sched1" } });
+    expect(result).toMatchObject({
+      ok: true,
+      scheduled: true,
+      scheduledMessageId: "sched1",
+      channelId: "chan1",
+      sendAt: futureSendAt,
+      text: "hello",
+      status: expect.stringContaining("Verification complete"),
+    });
     
     const apiCall = fetchMock.mock.calls.find((c: any) => c[0].toString().includes("createScheduledMessage"));
     const body = JSON.parse(apiCall[1].body);

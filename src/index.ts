@@ -54,7 +54,6 @@ interface SecurityChallenge {
   expiresAt: number;
 }
 const activeChallenges = new Map<string, SecurityChallenge>();
-const directoryToolFirstAttempts = new Set<string>();
 function generateToken(): string {
   return `AUTH-${Math.floor(1000 + Math.random() * 9000)}`;
 }
@@ -95,30 +94,38 @@ function wrapToolHandler<S extends z.ZodTypeAny>(
       };
     }
 
-    // 2. SINGLE-STRIKE FRICTION GATE FOR BULK-READING TOOLS
+    // 2. TOKEN CHALLENGE GATE FOR BULK DIRECTORY SCAN TOOLS
     const isBulkReadingTool =
       toolName.includes("list_channels") ||
-      toolName.includes("list_users") ||
-      toolName.includes("list_messages");
+      toolName.includes("list_users");
 
     if (isBulkReadingTool) {
-      if (!directoryToolFirstAttempts.has(toolName)) {
-        directoryToolFirstAttempts.add(toolName);
-        setTimeout(() => directoryToolFirstAttempts.delete(toolName), 45_000);
+      const providedToken = (args as any)?.confirmationToken;
+      const challenge = activeChallenges.get(toolName);
+
+      const isAuthorized =
+        providedToken &&
+        challenge &&
+        challenge.token === providedToken &&
+        now < challenge.expiresAt;
+
+      if (!isAuthorized) {
+        const token = generateToken();
+        activeChallenges.set(toolName, { token, expiresAt: now + 60_000 });
 
         return {
           isError: true,
           content: [
             {
               type: "text" as const,
-              text: `⛔ BLOCKED: UNNECESSARY DIRECTORY SCAN ATTEMPTED.\nDO NOT CALL THIS TOOL FOR LOOKUPS OR ID RESOLUTION!— all action tools resolve names/slugs natively! Call target tool directly.\nIf the user explicitly requested a full workspace directory, retry this tool immediately to proceed.`,
+              text: `⛔ BLOCKED: UNNECESSARY DIRECTORY SCAN ATTEMPTED.\nDO NOT CALL THIS TOOL FOR LOOKUPS OR ID RESOLUTION!— all action tools resolve names/slugs natively! Call target tool directly.\nIf the user explicitly requested a full workspace directory, ask the user for confirmation code ${token} to authorize it.`,
             },
           ],
         };
       }
 
-      // Second attempt within window: allow execution immediately
-      directoryToolFirstAttempts.delete(toolName);
+      // Token consumed and invalidated on successful authorization
+      activeChallenges.delete(toolName);
     }
 
     // 3. TOKEN CHALLENGE-RESPONSE GATE FOR DESTRUCTIVE TOOLS
@@ -145,7 +152,7 @@ function wrapToolHandler<S extends z.ZodTypeAny>(
           content: [
             {
               type: "text" as const,
-              text: `⚠️ SECURITY GATE: DESTRUCTIVE WORKSPACE ACTION INTERCEPTED.\nYou cannot execute destructive deletions or user removals autonomously.\nPresent this exact confirmation to the human user:\n"I am about to perform a destructive operation. If you intended this, please reply in chat with confirmation code ${token} to authorize it."\nDO NOT call this tool again until the human explicitly provides this confirmation code in their response.`,
+              text: `⚠️ SECURITY GATE: DESTRUCTIVE WORKSPACE ACTION INTERCEPTED.\nYou cannot execute destructive deletions or user removals autonomously.\nPresent this exact confirmation to the human user:\n"I am about to perform a destructive operation, i need confirmation token for sending it in payload. If you intended this, please reply in chat with confirmation code ${token} to authorize it."\nDO NOT call this tool again until the human explicitly provides this confirmation code in their response.`,
             },
           ],
         };
@@ -258,7 +265,7 @@ server.registerTool(
 server.registerTool(
   "pumble_search_messages",
   {
-    description: "Search messages across the workspace. (NATIVE USER RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "Search past message history. WARNING: Pumble search index has a 15-20 second indexing delay for newly posted messages. Do NOT use this tool to locate newly posted messages. (READ-ONLY - DO NOT CALL TO FIND RECIPIENTS, USERS, OR CHANNELS: Message action tools resolve names natively.)",
     inputSchema: searchMessagesShape,
   },
   wrapToolHandler(searchMessagesSchema, searchMessages)
@@ -314,7 +321,7 @@ server.registerTool(
 server.registerTool(
   "pumble_get_channel_detail_via_channel_name_or_id",
   {
-    description: "Look up a channel's details, accetps hypen and spaces. (READ-ONLY - DO NOT USE FOR MESSAGE ROUTING)",
+    description: "Look up a channel's details, accetps hypen and spaces. (READ-ONLY - DO NOT CALL FOR MEMBER/ID LOOKUP: All message and action tools natively resolve channel names and slugs directly into IDs. Only call if the human user explicitly asks to view the channel details.)",
     inputSchema: getChannelShape,
   },
   wrapToolHandler(getChannelSchema, getChannel)

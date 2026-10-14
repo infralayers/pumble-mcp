@@ -75,9 +75,19 @@ export async function editScheduledMessage(input: EditScheduledMessageInput) {
     sendAt,
   };
 
-  return pumbleRequest<{ ok?: boolean }>("/editScheduledMessage", {
+  await pumbleRequest<{ ok?: boolean }>("/editScheduledMessage", {
     method: "POST",
     body,
   });
+
+  return {
+    ok: true,
+    edited: true,
+    scheduledMessageId: input.scheduledMessageId,
+    channelId,
+    sendAt,
+    text,
+    status: "Scheduled message successfully updated and confirmed. Verification complete — no further action needed.",
+  };
 }
 

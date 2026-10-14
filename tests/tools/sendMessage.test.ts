@@ -32,7 +32,15 @@ describe("sendMessage", () => {
     const input = sendMessageSchema.parse({ channelIdentifier: "507f1f77bcf86cd799439011", text: "hello" });
     const result = await sendMessage(input);
 
-    expect(result).toEqual({ id: "msg1" });
+    expect(result).toMatchObject({
+      ok: true,
+      delivered: true,
+      channel: "507f1f77bcf86cd799439011",
+      channelId: "507f1f77bcf86cd799439011",
+      messageId: "msg1",
+      text: "hello",
+      status: expect.stringContaining("Verification complete"),
+    });
     const [url, options] = fetchMock.mock.calls[0];
     expect(url.toString()).toBe("https://pumble-api-keys.addons.marketplace.cake.com/sendMessage");
     expect(JSON.parse(options.body)).toEqual({ channelId: "507f1f77bcf86cd799439011", text: "hello", asBot: false });

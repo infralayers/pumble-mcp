@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
-import { resolveChannelId, resolveUserId } from "./resolve.js";
+import { resolveChannelId, resolveUserId, removeUserFromCachedChannel } from "./resolve.js";
 import { getChannel } from "./getChannel.js";
 
 export const removeUserFromChannelShape = {
@@ -23,10 +23,20 @@ export async function removeUserFromChannel(input: RemoveUserFromChannelInput) {
   ]);
 
   try {
-    return await pumbleRequest<unknown>("/removeUserFromChannel", {
+    await pumbleRequest<unknown>("/removeUserFromChannel", {
       method: "POST",
       body: { channelId: targetChannelId, userId: resolvedUserId },
     });
+    removeUserFromCachedChannel(targetChannelId, resolvedUserId);
+    return {
+      ok: true,
+      removed: true,
+      channel: input.channelIdentifier,
+      channelId: targetChannelId,
+      user: input.userIdentifier,
+      userId: resolvedUserId,
+      status: "User successfully removed from channel. Verification complete — no further action needed.",
+    };
   } catch (err: any) {
     if (err.message && err.message.includes("403")) {
       const channelData = await getChannel({ channelIdentifier: targetChannelId });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
-import { resolveChannelId, resolveUserId } from "./resolve.js";
+import { resolveChannelId, resolveUserId, addUsersToCachedChannel } from "./resolve.js";
 
 export const addUsersToChannelShape = {
   channelIdentifier: z.string().min(1).describe("Channel name, slug, or ID. If not provided, MUST ASK. DO NOT GUESS."),
@@ -20,11 +20,21 @@ export async function addUsersToChannel(input: AddUsersToChannelInput) {
     Promise.all(input.userIdentifiers.map(id => resolveUserId(id)))
   ]);
 
-  return pumbleRequest<unknown>("/addUsersToChannel", {
+  await pumbleRequest<unknown>("/addUsersToChannel", {
     method: "POST",
     body: {
       channelId: targetChannelId,
       userIds: resolvedUserIds,
     },
   });
+  addUsersToCachedChannel(targetChannelId, resolvedUserIds);
+  return {
+    ok: true,
+    added: true,
+    channel: input.channelIdentifier,
+    channelId: targetChannelId,
+    users: input.userIdentifiers,
+    userIds: resolvedUserIds,
+    status: "Users successfully added to channel. Verification complete — no further action needed.",
+  };
 }

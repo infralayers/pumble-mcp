@@ -1,19 +1,24 @@
 import { listChannels } from "./listChannels.js";
 import { listUsers } from "./listUsers.js";
-
-
+import { pumbleRequest } from "../pumbleClient.js";
 
 const ID_PATTERN = /^[0-9a-fA-F]{24}$/;
 
 // === SMART CACHE ===
 export let channelCache: PumbleChannelListItem[] | null = null;
 export let userCache: PumbleUser[] | null = null;
+export let myInfoCache: any | null = null;
 
 export async function getChannelsList(forceRefresh = false): Promise<PumbleChannelListItem[]> {
   if (channelCache && !forceRefresh) return channelCache;
   const raw = await listChannels({});
-  channelCache = (raw as any[]).map((c) => ({
-    channel: { id: c.channel?.id, name: c.channel?.name, channelType: c.channel?.channelType },
+  channelCache = (Array.isArray(raw) ? raw : []).map((c: any) => ({
+    channel: {
+      id: c.channel?.id,
+      name: c.channel?.name,
+      channelType: c.channel?.channelType,
+      isArchived: Boolean(c.channel?.isArchived),
+    },
     users: c.users,
   })) as PumbleChannelListItem[];
   return channelCache;
@@ -22,17 +27,24 @@ export async function getChannelsList(forceRefresh = false): Promise<PumbleChann
 export async function getUsersList(forceRefresh = false): Promise<PumbleUser[]> {
   if (userCache && !forceRefresh) return userCache;
   const raw = await listUsers({});
-  userCache = (raw as any[]).map((u) => ({
+  userCache = (Array.isArray(raw) ? raw : []).map((u: any) => ({
     id: u.id, name: u.name, realName: u.realName, email: u.email, status: u.status,
   })) as PumbleUser[];
   return userCache;
+}
+
+export async function getMyInfoCached(forceRefresh = false): Promise<any> {
+  if (myInfoCache && !forceRefresh) return myInfoCache;
+  myInfoCache = await pumbleRequest<any>("/myInfo", { method: "GET" });
+  return myInfoCache;
 }
 
 export async function prefetchIdentifiers(): Promise<void> {
   try {
     await Promise.all([
       getChannelsList(true),
-      getUsersList(true)
+      getUsersList(true),
+      getMyInfoCached(true),
     ]);
   } catch (err) {
     // Graceful degradation: cache stays null, system falls back to network on demand
@@ -45,6 +57,7 @@ export interface PumbleChannelListItem {
     id: string;
     name?: string;
     channelType?: string;
+    isArchived?: boolean;
   };
   users?: string[];
 }
@@ -142,12 +155,18 @@ export async function resolveChannelId(identifier: string): Promise<string> {
 
   const wasCached = channelCache !== null;
   let channelsList = await getChannelsList();
-  let matches = matchChannelsByName(identifier, channelsList);
+
+  const getActiveMatches = (list: PumbleChannelListItem[]) => {
+    const active = list.filter((c) => !c.channel?.isArchived);
+    return matchChannelsByName(identifier, active);
+  };
+
+  let matches = getActiveMatches(channelsList);
 
   if (matches.length === 0 && wasCached) {
     // Smart Lookup: Cache miss. Re-fetch in case it's a brand new channel
     channelsList = await getChannelsList(true);
-    matches = matchChannelsByName(identifier, channelsList);
+    matches = getActiveMatches(channelsList);
   }
 
   if (matches.length === 1) {
@@ -159,7 +178,20 @@ export async function resolveChannelId(identifier: string): Promise<string> {
     );
   }
 
-  const available = channelsList.map((c) => `#${c.channel?.name}`).filter(Boolean).join(", ");
+  // Check if target is an archived channel
+  const archivedMatches = matchChannelsByName(
+    identifier,
+    channelsList.filter((c) => c.channel?.isArchived),
+  );
+  if (archivedMatches.length > 0) {
+    throw new Error(`Channel '${identifier}' is archived and cannot be targeted.`);
+  }
+
+  const available = channelsList
+    .filter((c) => !c.channel?.isArchived)
+    .map((c) => `#${c.channel?.name}`)
+    .filter(Boolean)
+    .join(", ");
   const hint = available ? ` Available channels: ${available}.` : "";
   throw new Error(`Channel with name '${identifier}' could not be found in the workspace.${hint}`);
 }
@@ -172,10 +204,13 @@ export async function resolveChannelId(identifier: string): Promise<string> {
 export async function resolveDmChannelId(userId: string): Promise<string> {
   const wasCached = channelCache !== null;
   let channelsList = await getChannelsList();
+  const myInfo = await getMyInfoCached();
 
   const findDm = (channels: PumbleChannelListItem[]) => {
-    const selfChannel = channels.find((c) => c.channel?.channelType === "SELF");
-    if (selfChannel?.channel?.id && selfChannel.users?.[0] === userId) return selfChannel.channel.id;
+    if (myInfo?.id && userId === myInfo.id) {
+      const selfChannel = channels.find((c) => c.channel?.channelType === "SELF");
+      if (selfChannel?.channel?.id) return selfChannel.channel.id;
+    }
     const directChannel = channels.find((c) => c.channel?.channelType === "DIRECT" && c.users?.includes(userId));
     return directChannel?.channel?.id;
   };
@@ -235,5 +270,59 @@ export async function resolveUserId(identifier: string): Promise<string> {
 export function clearCache() {
   channelCache = null;
   userCache = null;
+  myInfoCache = null;
+}
+
+export function updateCachedCustomStatus(status: {
+  code: string;
+  status: string;
+  expiration: string;
+  expiresAt: number;
+}) {
+  if (myInfoCache) {
+    myInfoCache.customStatus = {
+      code: status.code,
+      status: status.status,
+      expiration: status.expiration,
+      expiresAt: status.expiresAt,
+    };
+  }
+}
+
+export function addUsersToCachedChannel(channelId: string, userIds: string[]) {
+  if (channelCache) {
+    const item = channelCache.find((c) => c.channel?.id === channelId);
+    if (item) {
+      if (!item.users) item.users = [];
+      for (const uid of userIds) {
+        if (!item.users.includes(uid)) {
+          item.users.push(uid);
+        }
+      }
+    }
+  }
+}
+
+export function removeUserFromCachedChannel(channelId: string, userId: string) {
+  if (channelCache) {
+    const item = channelCache.find((c) => c.channel?.id === channelId);
+    if (item && item.users) {
+      item.users = item.users.filter((id) => id !== userId);
+    }
+  }
+}
+
+export function addChannelToCache(channel: { id?: string; name?: string; channelType?: string }) {
+  if (channelCache && channel.id) {
+    channelCache.push({
+      channel: {
+        id: channel.id,
+        name: channel.name,
+        channelType: channel.channelType || "PUBLIC",
+        isArchived: false,
+      },
+      users: [],
+    });
+  }
 }
 

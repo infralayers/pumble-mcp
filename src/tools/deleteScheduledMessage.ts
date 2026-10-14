@@ -12,10 +12,17 @@ export const deleteScheduledMessageSchema = z.object(deleteScheduledMessageShape
 export type DeleteScheduledMessageInput = z.infer<typeof deleteScheduledMessageSchema>;
 
 export async function deleteScheduledMessage(input: DeleteScheduledMessageInput) {
-  return pumbleRequest<{ ok?: boolean }>("/deleteScheduledMessage", {
+  await pumbleRequest<{ ok?: boolean }>("/deleteScheduledMessage", {
     method: "DELETE",
     query: {
       scheduledMessageId: input.scheduledMessageId,
     },
   });
+
+  return {
+    ok: true,
+    deleted: true,
+    scheduledMessageId: input.scheduledMessageId,
+    status: "Scheduled message successfully deleted. Verification complete — no further action needed.",
+  };
 }

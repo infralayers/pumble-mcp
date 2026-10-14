@@ -69,7 +69,15 @@ describe("updateCustomStatus", () => {
       expiresAt: 1775654338000,
     });
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({
+      ok: true,
+      statusUpdated: true,
+      customStatus: "In a meeting",
+      code: ":calendar:",
+      expiration: "custom",
+      expiresAt: 1775654338000,
+      status: expect.stringContaining("Verification complete"),
+    });
     const [url, options] = fetchMock.mock.calls[0];
     expect(options.body).toBe(
       JSON.stringify({
@@ -95,7 +103,15 @@ describe("updateCustomStatus", () => {
       expiresAt: "2026-07-28T14:00:00+05:00",
     });
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({
+      ok: true,
+      statusUpdated: true,
+      customStatus: "In a meeting",
+      code: ":calendar:",
+      expiration: "custom",
+      expiresAt: Date.parse("2026-07-28T14:00:00+05:00"),
+      status: expect.stringContaining("Verification complete"),
+    });
     const [url, options] = fetchMock.mock.calls[0];
     const parsedBody = JSON.parse(options.body as string);
     expect(parsedBody.expiresAt).toBe(Date.parse("2026-07-28T14:00:00+05:00"));
