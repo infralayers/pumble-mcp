@@ -83,7 +83,15 @@ describe("editScheduledMessage", () => {
     });
     const result = await editScheduledMessage(input);
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({
+      ok: true,
+      edited: true,
+      scheduledMessageId: "sch123",
+      channelId: "chan-general",
+      text: "Old text",
+      sendAt: 1784620000000,
+      status: expect.stringContaining("Verification complete"),
+    });
 
     const editCall = fetchMock.mock.calls.find((call) =>
       call[0].toString().includes("/editScheduledMessage")

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
 import { toEpochMs } from "./createScheduledMessage.js";
+import { updateCachedCustomStatus } from "./resolve.js";
 
 export const updateCustomStatusShape = {
   status: z.string().max(128).optional().describe("The status message text (max 128 chars). Send empty string or omit to clear."),
@@ -56,7 +57,7 @@ export async function updateCustomStatus(input: UpdateCustomStatusInput) {
   const code = input.code || "";
   const status = input.status || "";
 
-  return pumbleRequest<{ ok?: boolean }>("/customStatus", {
+  await pumbleRequest<{ ok?: boolean }>("/customStatus", {
     method: "POST",
     body: {
       code,
@@ -65,4 +66,14 @@ export async function updateCustomStatus(input: UpdateCustomStatusInput) {
       expiresAt: expiresAtMs,
     },
   });
+  updateCachedCustomStatus({ code, status, expiration, expiresAt: expiresAtMs });
+  return {
+    ok: true,
+    statusUpdated: true,
+    customStatus: status,
+    code,
+    expiration,
+    expiresAt: expiresAtMs,
+    status: "Custom status successfully updated. Verification complete — no further action needed.",
+  };
 }

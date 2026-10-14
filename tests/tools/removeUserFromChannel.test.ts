@@ -114,38 +114,30 @@ describe("removeUserFromChannel", () => {
   });
 
   it("throws an error if the channel name cannot be resolved", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ // listChannels
-        ok: true,
-        text: async () => JSON.stringify([{ channel: { id: "chan1", name: "general" } }]),
-      })
-      .mockResolvedValueOnce({ // listUsers fallback
-        ok: true,
-        text: async () => JSON.stringify([]),
-      });
-
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "general" } }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Jordan Blake" }]) });
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = removeUserFromChannelSchema.parse({
       channelIdentifier: "nonexistent-channel",
-      userIdentifier: "usr1",
+      userIdentifier: "Jordan Blake",
       confirm: true,
     });
 
     await expect(removeUserFromChannel(input)).rejects.toThrow(/Channel with name 'nonexistent-channel' could not be found/);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("resolves the user by name case-insensitively", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ // listUsers
-        ok: true,
-        text: async () => JSON.stringify([{ id: "usr1", name: "Jordan Blake" }]),
-      })
-      .mockResolvedValueOnce({ // removeUserFromChannel
-        ok: true,
-        text: async () => JSON.stringify({ success: true }),
-      });
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "507f1f77bcf86cd799439011", name: "chan" } }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Jordan Blake" }]) });
+      return Promise.resolve({ ok: true, text: async () => JSON.stringify({ success: true }) });
+    });
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -157,7 +149,8 @@ describe("removeUserFromChannel", () => {
 
     await removeUserFromChannel(input);
 
-    const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    const removeCall = fetchMock.mock.calls.find((call: any) => call[0].toString().includes("removeUserFromChannel"));
+    const body = JSON.parse(removeCall[1].body as string);
     expect(body.userId).toBe("usr1");
     expect(body.channelId).toBe("507f1f77bcf86cd799439011");
   });

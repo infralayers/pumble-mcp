@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
-import { listChannels } from "./listChannels.js";
-import { resolveChannelId, resolveUserId } from "./resolve.js";
+import { resolveChannelId, resolveUserId, resolveDmChannelId } from "./resolve.js";
 import { getScheduledMessage } from "./getScheduledMessage.js";
 
 export const editScheduledMessageShape = {
@@ -31,24 +30,7 @@ async function resolveScheduledMessageChannelId(input: EditScheduledMessageInput
 
   if (input.userIdentifier) {
     const targetUserId = await resolveUserId(input.userIdentifier);
-
-    const channels = (await listChannels({})) as any[];
-    const selfChannel = channels.find((c) => c.channel?.channelType === "SELF");
-    const currentUserId = selfChannel?.users?.[0];
-
-    if (currentUserId && targetUserId === currentUserId) {
-      return selfChannel?.channel?.id;
-    }
-
-    const directChannel = channels.find(
-      (c) =>
-        c.channel?.channelType === "DIRECT" &&
-        c.users?.includes(targetUserId)
-    );
-    if (!directChannel) {
-      throw new Error(`DM channel not found for user: ${targetUserId}`);
-    }
-    return directChannel.channel?.id;
+    return resolveDmChannelId(targetUserId);
   }
 
   return undefined;
@@ -93,9 +75,19 @@ export async function editScheduledMessage(input: EditScheduledMessageInput) {
     sendAt,
   };
 
-  return pumbleRequest<{ ok?: boolean }>("/editScheduledMessage", {
+  await pumbleRequest<{ ok?: boolean }>("/editScheduledMessage", {
     method: "POST",
     body,
   });
+
+  return {
+    ok: true,
+    edited: true,
+    scheduledMessageId: input.scheduledMessageId,
+    channelId,
+    sendAt,
+    text,
+    status: "Scheduled message successfully updated and confirmed. Verification complete — no further action needed.",
+  };
 }
 

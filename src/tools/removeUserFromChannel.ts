@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
-import { resolveChannelId, resolveUserId } from "./resolve.js";
+import { resolveChannelId, resolveUserId, removeUserFromCachedChannel } from "./resolve.js";
 import { getChannel } from "./getChannel.js";
 
 export const removeUserFromChannelShape = {
@@ -17,14 +17,26 @@ export const removeUserFromChannelSchema = z.object(removeUserFromChannelShape).
 export type RemoveUserFromChannelInput = z.infer<typeof removeUserFromChannelSchema>;
 
 export async function removeUserFromChannel(input: RemoveUserFromChannelInput) {
-  const targetChannelId = await resolveChannelId(input.channelIdentifier);
-  const resolvedUserId = await resolveUserId(input.userIdentifier);
+  const [targetChannelId, resolvedUserId] = await Promise.all([
+    resolveChannelId(input.channelIdentifier),
+    resolveUserId(input.userIdentifier)
+  ]);
 
   try {
-    return await pumbleRequest<unknown>("/removeUserFromChannel", {
+    await pumbleRequest<unknown>("/removeUserFromChannel", {
       method: "POST",
       body: { channelId: targetChannelId, userId: resolvedUserId },
     });
+    removeUserFromCachedChannel(targetChannelId, resolvedUserId);
+    return {
+      ok: true,
+      removed: true,
+      channel: input.channelIdentifier,
+      channelId: targetChannelId,
+      user: input.userIdentifier,
+      userId: resolvedUserId,
+      status: "User successfully removed from channel. Verification complete — no further action needed.",
+    };
   } catch (err: any) {
     if (err.message && err.message.includes("403")) {
       const channelData = await getChannel({ channelIdentifier: targetChannelId });

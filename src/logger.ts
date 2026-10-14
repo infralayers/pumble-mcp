@@ -1,24 +1,20 @@
 import fs from "fs";
 import path from "path";
-import os from "os";
+import { fileURLToPath } from "url";
 
-// We store logs in the user's home directory (in an Antigravity folder)
-// so the workspace stays clean and doesn't trigger nodemon/vitest re-runs
-const LOG_DIR = path.join(os.homedir(), ".gemini", "antigravity-cli", "pumble-logs");
-if (process.env.PUMBLE_DEBUG === "true") {
-  if (!fs.existsSync(LOG_DIR)) {
-    fs.mkdirSync(LOG_DIR, { recursive: true });
-  }
-}
-const LOG_FILE = path.join(LOG_DIR, "pumble_mcp.log");
+// Store logs directly in repository root as pumble.log (matching .gitignore)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(__dirname, "..");
+const LOG_FILE = process.env.PUMBLE_LOG_FILE || path.join(REPO_ROOT, "pumble.log");
 
 export function logStderr(message: string, ...args: any[]) {
-  // KILL SWITCH: In production, just log to stderr for standard MCP debugging, but skip the file system overhead.
   const logEntry = `[pumble-mcp] ${new Date().toISOString()} ${message} ${args.length ? JSON.stringify(args) : ""}\n`;
-  if (process.env.NODE_ENV !== "test") { process.stderr.write(logEntry); }
+  if (process.env.NODE_ENV !== "test") {
+    process.stderr.write(logEntry);
+  }
 
-  // If we are debugging locally, write everything to a physical log file to track latency metrics
-  if (process.env.PUMBLE_DEBUG === "true") {
+  // Write to repository log file unless running in test mode or explicitly disabled
+  if (process.env.NODE_ENV !== "test" && process.env.PUMBLE_DEBUG !== "false") {
     try {
       fs.appendFileSync(LOG_FILE, logEntry);
     } catch (e) {
