@@ -5,8 +5,7 @@ import { resolveChannelId } from "./resolve.js";
 export const listMessagesShape = {
   channelIdentifier: z.string().min(1).describe("Channel name, slug, or ID. If not provided, MUST ASK. DO NOT GUESS."),
   cursor: z.string().optional().describe("Pagination cursor for next page."),
-  limit: z.number().int().positive().optional().describe("Max number of messages to fetch."),
-  confirmationToken: z.string().optional().describe("One-time security confirmation token authorized by the human user."),
+  limit: z.number().int().positive().max(100).default(10).describe("Max number of messages to fetch (defaults to 10, max: 100)."),
 };
 
 export const listMessagesSchema = z.object(listMessagesShape).strict();

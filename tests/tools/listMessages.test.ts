@@ -35,7 +35,7 @@ describe("listMessages", () => {
     );
   });
 
-  it("omits cursor/limit from the query string when not given", async () => {
+  it("applies default limit of 10 when limit is not given", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       text: async () => JSON.stringify({ hasMoreAfter: false, hasMoreBefore: false, messages: [] }),
@@ -47,7 +47,7 @@ describe("listMessages", () => {
 
     const [url] = fetchMock.mock.calls[0];
     expect(url.toString()).toBe(
-      "https://pumble-api-keys.addons.marketplace.cake.com/listMessages?channelId=507f1f77bcf86cd799439012",
+      "https://pumble-api-keys.addons.marketplace.cake.com/listMessages?channelId=507f1f77bcf86cd799439012&limit=10",
     );
   });
 });

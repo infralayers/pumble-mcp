@@ -44,7 +44,14 @@ describe("createChannel", () => {
     const input = createChannelSchema.parse({ name: "my-channel", type: "PRIVATE" });
     const result = await createChannel(input);
 
-    expect(result).toEqual({ id: "new-channel-id", name: "my-channel" });
+    expect(result).toMatchObject({
+      ok: true,
+      created: true,
+      channelId: "new-channel-id",
+      name: "my-channel",
+      type: "PRIVATE",
+      status: expect.stringContaining("Verification complete"),
+    });
     
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, options] = fetchMock.mock.calls[0];

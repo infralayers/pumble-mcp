@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createScheduledMessage, createScheduledMessageSchema } from "../../src/tools/createScheduledMessage.js";
+import { clearCache } from "../../src/tools/resolve.js";
 
 describe("createScheduledMessageSchema", () => {
   it("rejects when neither channelIdentifier nor userIdentifier is missing", () => {
@@ -43,6 +44,7 @@ describe("createScheduledMessageSchema", () => {
 
 describe("createScheduledMessage", () => {
   beforeEach(() => {
+    clearCache();
     process.env.PUMBLE_API_KEY = "test-key";
   });
 
@@ -67,7 +69,15 @@ describe("createScheduledMessage", () => {
     });
     const result = await createScheduledMessage(input);
 
-    expect(result).toEqual({ success: true, message: { id: "sched1" } });
+    expect(result).toMatchObject({
+      ok: true,
+      scheduled: true,
+      scheduledMessageId: "sched1",
+      channelId: "chan1",
+      sendAt: futureSendAt,
+      text: "hello",
+      status: expect.stringContaining("Verification complete"),
+    });
     
     const apiCall = fetchMock.mock.calls.find((c: any) => c[0].toString().includes("createScheduledMessage"));
     const body = JSON.parse(apiCall[1].body);

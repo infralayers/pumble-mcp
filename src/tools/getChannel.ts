@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
-import { resolveChannelId } from "./resolve.js";
+import { resolveChannelId, getUsersList } from "./resolve.js";
 
 export const getChannelShape = {
   channelIdentifier: z.string().min(1).describe("Channel name, slug, or ID. If not provided, MUST ASK. DO NOT GUESS."),
@@ -15,7 +15,7 @@ export async function getChannel(input: GetChannelInput) {
 
   const [channelData, allUsers] = await Promise.all([
     pumbleRequest<any>("/getChannel", { method: "GET", query: { channelId: targetChannelId } }),
-    pumbleRequest<any[]>("/listUsers", { method: "GET" })
+    getUsersList()
   ]);
 
   if (channelData && channelData.users && Array.isArray(channelData.users)) {

@@ -33,7 +33,12 @@ describe("deleteScheduledMessage", () => {
     });
     const result = await deleteScheduledMessage(input);
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({
+      ok: true,
+      deleted: true,
+      scheduledMessageId: "sch123",
+      status: expect.stringContaining("Verification complete"),
+    });
     const { method, url, body } = callTo(fetchMock, "/deleteScheduledMessage");
     expect(method).toBe("DELETE");
     expect(url).toContain("scheduledMessageId=sch123");

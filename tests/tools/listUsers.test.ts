@@ -20,7 +20,15 @@ describe("listUsers", () => {
 
     const result = await listUsers({});
 
-    expect(result).toEqual([{ id: "507f1f77bcf86cd799439021", name: "Jane" }]);
+    expect(result).toEqual([
+      {
+        id: "507f1f77bcf86cd799439021",
+        name: "Jane",
+        realName: undefined,
+        email: undefined,
+        status: undefined,
+      },
+    ]);
     const [url, options] = fetchMock.mock.calls[0];
     expect(url.toString()).toBe("https://pumble-api-keys.addons.marketplace.cake.com/listUsers");
     expect(options.method).toBe("GET");
