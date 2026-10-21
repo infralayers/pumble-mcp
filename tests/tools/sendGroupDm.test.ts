@@ -106,7 +106,7 @@ describe("sendGroupDm", () => {
   it("throws when user not found", async () => {
     setupFetchMock();
     await expect(sendGroupDm({ text: "Hello", userIdentifiers: ["Charlie", "Bob Builder"] })).rejects.toThrow(
-      /Charlie' could not be found/,
+      /Could not be identified in workspace \(user\): 'Charlie'/,
     );
   });
 

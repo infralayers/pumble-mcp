@@ -20,7 +20,17 @@ describe("listChannels", () => {
 
     const result = await listChannels({});
 
-    expect(result).toEqual([{ channel: { id: "1", name: "general" } }]);
+    expect(result).toEqual([
+      {
+        id: "1",
+        name: "general",
+        type: undefined,
+        isArchived: false,
+        creator: undefined,
+        createdAt: undefined,
+        memberCount: 0,
+      },
+    ]);
     const [url, options] = fetchMock.mock.calls[0];
     expect(url.toString()).toBe("https://pumble-api-keys.addons.marketplace.cake.com/listChannels");
     expect(options.method).toBe("GET");

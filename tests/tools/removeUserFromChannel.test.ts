@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { removeUserFromChannel, removeUserFromChannelSchema } from "../../src/tools/removeUserFromChannel.js";
+import { clearCache } from "../../src/tools/resolve.js";
 
 describe("removeUserFromChannelSchema", () => {
   
@@ -22,6 +23,7 @@ describe("removeUserFromChannelSchema", () => {
 
 describe("removeUserFromChannel", () => {
   beforeEach(() => {
+    clearCache();
     process.env.PUMBLE_API_KEY = "test-key";
   });
 

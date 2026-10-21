@@ -1,34 +1,25 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
-import { resolveChannelId, resolveUserId } from "./resolve.js";
+import { resolveBatch } from "./resolve.js";
 
 export const searchMessagesShape = {
-  text: z.string().optional().describe("Text query to search for. If not provided, DO NOT GUESS."),
+  text: z.string().min(1).describe("Text query to search for. If not provided, MUST ASK. DO NOT GUESS."),
   fromUserIdentifiers: z.union([z.string(), z.array(z.string())]).optional().transform(v => typeof v === 'string' ? [v] : v).describe("User names, emails, or IDs to filter by. If not provided, DO NOT GUESS."),
   inChannelIdentifiers: z.union([z.string(), z.array(z.string())]).optional().transform(v => typeof v === 'string' ? [v] : v).describe("Channel names, slugs, or IDs to filter by. If not provided, DO NOT GUESS."),
   after: z.string().optional().describe("Filter messages after this date (ISO 8601 date string)."),
   before: z.string().optional().describe("Filter messages before this date (ISO 8601 date string)."),
 };
 
-export const searchMessagesSchema = z
-  .object(searchMessagesShape)
-  .strict()
-  .refine(
-  (data) => Boolean(data.text) || (data.fromUserIdentifiers && data.fromUserIdentifiers.length > 0) || (data.inChannelIdentifiers && data.inChannelIdentifiers.length > 0),
-  { message: "At least one of 'text', 'fromUserIdentifiers', or 'inChannelIdentifiers' must be provided." }
-);
+export const searchMessagesSchema = z.object(searchMessagesShape).strict();
 
 export type SearchMessagesInput = z.infer<typeof searchMessagesSchema>;
 
 export async function searchMessages(input: SearchMessagesInput) {
-  const [resolvedFrom, resolvedIn] = await Promise.all([
-    input.fromUserIdentifiers && input.fromUserIdentifiers.length > 0
-      ? Promise.all(input.fromUserIdentifiers.map(id => resolveUserId(id)))
-      : Promise.resolve(undefined),
-    input.inChannelIdentifiers && input.inChannelIdentifiers.length > 0
-      ? Promise.all(input.inChannelIdentifiers.map(id => resolveChannelId(id)))
-      : Promise.resolve(undefined)
-  ]);
+  const { userIds: resolvedFrom, channelIds: resolvedIn } = await resolveBatch({
+    users: input.fromUserIdentifiers,
+    channels: input.inChannelIdentifiers,
+    actionName: "search messages",
+  });
 
   const result = await pumbleRequest<any>("/searchMessages", {
     method: "POST",

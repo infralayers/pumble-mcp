@@ -191,7 +191,7 @@ function wrapToolHandler<S extends z.ZodTypeAny>(
 
 // === Messages & Threads ===
 server.registerTool(
-  "pumble_send_message_via_channel_name_or_id",
+  "send_message_via_channel_name_or_id",
   {
     description: "Send a channel message. (NATIVE CHANNEL NAME RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: sendMessageShape,
@@ -200,16 +200,16 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_list_messages_via_channel_name_or_id",
+  "list_messages_via_channel_name_or_id",
   {
     description: "List messages in a channel. (NATIVE CHANNEL NAME RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: listMessagesShape,
   },
-  wrapToolHandler(listMessagesSchema, listMessages, "pumble_list_messages")
+  wrapToolHandler(listMessagesSchema, listMessages, "list_messages")
 );
 
 server.registerTool(
-  "pumble_edit_message",
+  "edit_message",
   {
     description: "Edit a previously sent message. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: editMessageShape,
@@ -218,7 +218,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_send_dm_via_name_email_or_id",
+  "send_dm_via_name_email_or_id",
   {
     description: "Send a direct message. (NATIVE NAME/EMAIL RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: sendDmShape,
@@ -227,7 +227,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_send_group_dm_via_names_emails_or_ids",
+  "send_group_dm_via_names_emails_or_ids",
   {
     description: "Send a group direct message. (NATIVE NAME/EMAIL RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: sendGroupDmShape,
@@ -236,7 +236,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_get_my_info",
+  "get_my_info",
   {
     description: "Get profile information about the current authenticated user.",
     inputSchema: getMyInfoShape,
@@ -245,7 +245,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_list_user_groups",
+  "list_user_groups",
   {
     description: "List all user groups in the workspace.",
     inputSchema: listUserGroupsShape,
@@ -254,7 +254,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_update_my_custom_status",
+  "update_my_custom_status",
   {
     description: "Update the custom status of the authenticated user.",
     inputSchema: updateCustomStatusShape,
@@ -263,7 +263,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_search_messages",
+  "search_messages",
   {
     description: "Search past message history. WARNING: Pumble search index has a 15-20 second indexing delay for newly posted messages. Do NOT use this tool to locate newly posted messages. (READ-ONLY - DO NOT CALL TO FIND RECIPIENTS, USERS, OR CHANNELS: Message action tools resolve names natively.)",
     inputSchema: searchMessagesShape,
@@ -272,16 +272,16 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_reply_message_via_channel_name_or_id",
+  "reply_message_via_channel_name_or_id",
   {
-    description: "Reply to a message to create/continue a thread. (NATIVE CHANNEL NAME RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "Reply to a message to create or continue a thread. To start a new thread, first send a message with send_message_via_channel_name_or_id, then reply to it with this tool using the returned messageId. (NATIVE CHANNEL NAME RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: replyMessageShape,
   },
   wrapToolHandler(replyMessageSchema, replyMessage)
 );
 
 server.registerTool(
-  "pumble_list_thread_replies_via_channel_name_or_id",
+  "list_thread_replies_via_channel_name_or_id",
   {
     description: "Fetch all replies for a thread. (NATIVE CHANNEL NAME RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: listThreadRepliesShape,
@@ -291,7 +291,7 @@ server.registerTool(
 
 // === Reactions ===
 server.registerTool(
-  "pumble_add_reaction",
+  "add_reaction",
   {
     description: "Add a reaction to a message. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: addReactionShape,
@@ -300,7 +300,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_remove_reaction",
+  "remove_reaction",
   {
     description: "Remove a reaction from a message. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: removeReactionShape,
@@ -310,16 +310,16 @@ server.registerTool(
 
 // === Channels ===
 server.registerTool(
-  "pumble_list_channels_only_when_user_calls",
+  "list_channels_only_when_user_calls",
   {
     description: "List all visible channels. (READ-ONLY - DO NOT CALL FOR ID LOOKUP: All message and action tools natively resolve channel names and slugs directly into IDs. Only call if the human user explicitly asks to view the channel directory.)",
     inputSchema: listChannelsShape,
   },
-  wrapToolHandler(listChannelsSchema, listChannels, "pumble_list_channels")
+  wrapToolHandler(listChannelsSchema, listChannels, "list_channels")
 );
 
 server.registerTool(
-  "pumble_get_channel_detail_via_channel_name_or_id",
+  "get_channel_detail_via_channel_name_or_id",
   {
     description: "Look up a channel's details, accetps hypen and spaces. (READ-ONLY - DO NOT CALL FOR MEMBER/ID LOOKUP: All message and action tools natively resolve channel names and slugs directly into IDs. Only call if the human user explicitly asks to view the channel details.)",
     inputSchema: getChannelShape,
@@ -328,8 +328,7 @@ server.registerTool(
 );
 
 server.registerTool(
-
-  "pumble_create_channel",
+  "create_channel",
   {
     description: "Create a new public or private channel.",
     inputSchema: createChannelShape,
@@ -338,7 +337,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_add_users_to_channel_via_emails_channel_name_or_id",
+  "add_users_to_channel_via_name_or_id",
   {
     description: "Add users to a channel. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: addUsersToChannelShape,
@@ -347,27 +346,27 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_remove_user_from_channel_via_email_channel_name_or_id",
+  "remove_user_from_channel_via_name_or_id",
   {
     description: "Remove a user from a channel. (NATIVE RESOLUTION - DANGER: REQUIRES EXPLICIT USER CONFIRMATION)",
     inputSchema: removeUserFromChannelShape,
   },
-  wrapToolHandler(removeUserFromChannelSchema, removeUserFromChannel, "pumble_remove_user_from_channel")
+  wrapToolHandler(removeUserFromChannelSchema, removeUserFromChannel, "remove_user")
 );
 
 // === Workspace & Users ===
 server.registerTool(
-  "pumble_list_users_not_for_id_lookup",
+  "list_users_not_for_id_lookup",
   {
     description: "List all workspace users. (READ-ONLY - DO NOT CALL FOR ID LOOKUP: All message and action tools natively resolve user names and emails directly into IDs. Only call if the human user explicitly asks to view the user list.)",
     inputSchema: listUsersShape,
   },
-  wrapToolHandler(listUsersSchema, listUsers, "pumble_list_users")
+  wrapToolHandler(listUsersSchema, listUsers, "list_users")
 );
 
 // === Scheduled Messages ===
 server.registerTool(
-  "pumble_list_scheduled_messages",
+  "list_scheduled_messages",
   {
     description: "List all scheduled messages. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: listScheduledMessagesShape,
@@ -376,7 +375,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_create_scheduled_message_via_name_or_id",
+  "create_scheduled_message_via_name_or_id",
   {
     description: "Schedule a message for the future. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: createScheduledMessageShape,
@@ -385,7 +384,7 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_edit_scheduled_message_via_name_or_id",
+  "edit_scheduled_message_via_name_or_id",
   {
     description: "Edit a scheduled message. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: editScheduledMessageShape,
@@ -394,16 +393,16 @@ server.registerTool(
 );
 
 server.registerTool(
-  "pumble_delete_scheduled_message_via_name_or_id",
+  "delete_scheduled_message_via_name_or_id",
   {
     description: "Delete a scheduled message. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
     inputSchema: deleteScheduledMessageShape,
   },
-  wrapToolHandler(deleteScheduledMessageSchema, deleteScheduledMessage, "pumble_delete_scheduled_message")
+  wrapToolHandler(deleteScheduledMessageSchema, deleteScheduledMessage, "delete_scheduled")
 );
 
 server.registerTool(
-  "pumble_get_scheduled_message_via_name_or_id",
+  "get_scheduled_message_via_name_or_id",
   {
     description: "Fetch a scheduled message. (READ-ONLY)",
     inputSchema: getScheduledMessageShape,

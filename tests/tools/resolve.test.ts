@@ -13,6 +13,8 @@ import {
   removeUserFromCachedChannel,
   addChannelToCache,
   updateCachedCustomStatus,
+  setCacheMissCooldownMs,
+  resolveBatch,
 } from "../../src/tools/resolve.js";
 
 describe("isLikelyId", () => {
@@ -87,6 +89,7 @@ describe("resolveChannelId / resolveUserId", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     delete process.env.PUMBLE_API_KEY;
+    setCacheMissCooldownMs(3000);
   });
 
   it("resolveChannelId passes raw IDs through without a fetch", async () => {
@@ -170,7 +173,8 @@ describe("resolveChannelId / resolveUserId", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1); // Still 1!
   });
 
-  it("forces a network fetch on Cache Miss for a new channel", async () => {
+  it("forces a network fetch on Cache Miss for a new channel when cooldown has elapsed", async () => {
+    setCacheMissCooldownMs(0); // Elapsed cooldown allows re-fetch
     // Setup a cache with some other channel first
     let fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -193,6 +197,23 @@ describe("resolveChannelId / resolveUserId", () => {
     // Call: Misses cache, falls back to network, finds it!
     await expect(resolveChannelId("new-channel")).resolves.toBe("c_new");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips network fetch on Cache Miss if cache was updated within cooldown", async () => {
+    setCacheMissCooldownMs(3000);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify([{ channel: { id: "c_old", name: "old-channel" } }]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    // Call 1: Misses initial cache, fetches old-channel
+    await resolveChannelId("old-channel");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Call 2: Misses cache for "new-channel" within 3s cooldown -> skips network call!
+    await expect(resolveChannelId("new-channel")).rejects.toThrow(/could not be found/);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // Still 1 call!
   });
 
   it("resolveChannelId reports available channels on miss without prompt injections", async () => {
@@ -327,5 +348,56 @@ describe("resolveChannelId / resolveUserId", () => {
     expect(info2.customStatus.status).toBe("new status");
     expect(info2.customStatus.code).toBe(":smile:");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("resolveBatch", () => {
+  beforeEach(() => {
+    clearCache();
+    process.env.PUMBLE_API_KEY = "test-key";
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.PUMBLE_API_KEY;
+  });
+
+  it("resolves both users and channels concurrently when all are valid", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "c1", name: "general" } }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "u1", name: "Alice" }]) });
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await resolveBatch({
+      users: ["Alice"],
+      channels: ["general"],
+      actionName: "test concurrent",
+    });
+
+    expect(result.userIds).toEqual(["u1"]);
+    expect(result.channelIds).toEqual(["c1"]);
+  });
+
+  it("throws with formatted error when both user and channel are missing", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "c1", name: "general" } }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "u1", name: "Alice" }]) });
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      resolveBatch({
+        users: ["Alice", "MissingUser"],
+        channels: ["general", "MissingChannel"],
+        actionName: "search messages",
+      })
+    ).rejects.toThrow(
+      /Cannot search messages: Could not be identified in workspace \(user\): 'MissingUser'; Could not be identified in workspace \(channel\): 'MissingChannel'\.\nIdentified in workspace: user\(s\): 'Alice'; channel\(s\): 'general'\.\nSTOP: Missing entities do not exist in workspace\./
+    );
   });
 });

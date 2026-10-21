@@ -1,5 +1,3 @@
-import { listChannels } from "./listChannels.js";
-import { listUsers } from "./listUsers.js";
 import { pumbleRequest } from "../pumbleClient.js";
 
 const ID_PATTERN = /^[0-9a-fA-F]{24}$/;
@@ -8,10 +6,18 @@ const ID_PATTERN = /^[0-9a-fA-F]{24}$/;
 export let channelCache: PumbleChannelListItem[] | null = null;
 export let userCache: PumbleUser[] | null = null;
 export let myInfoCache: any | null = null;
+export let channelCacheUpdatedAt = 0;
+export let userCacheUpdatedAt = 0;
+export let cacheMissCooldownMs = 3000;
+
+export function setCacheMissCooldownMs(ms: number) {
+  cacheMissCooldownMs = ms;
+}
 
 export async function getChannelsList(forceRefresh = false): Promise<PumbleChannelListItem[]> {
   if (channelCache && !forceRefresh) return channelCache;
-  const raw = await listChannels({});
+  const raw = await pumbleRequest<any[]>("/listChannels", { method: "GET" });
+  channelCacheUpdatedAt = Date.now();
   channelCache = (Array.isArray(raw) ? raw : []).map((c: any) => ({
     channel: {
       id: c.channel?.id,
@@ -26,7 +32,8 @@ export async function getChannelsList(forceRefresh = false): Promise<PumbleChann
 
 export async function getUsersList(forceRefresh = false): Promise<PumbleUser[]> {
   if (userCache && !forceRefresh) return userCache;
-  const raw = await listUsers({});
+  const raw = await pumbleRequest<any[]>("/listUsers", { method: "GET" });
+  userCacheUpdatedAt = Date.now();
   userCache = (Array.isArray(raw) ? raw : []).map((u: any) => ({
     id: u.id, name: u.name, realName: u.realName, email: u.email, status: u.status,
   })) as PumbleUser[];
@@ -163,7 +170,10 @@ export async function resolveChannelId(identifier: string): Promise<string> {
 
   let matches = getActiveMatches(channelsList);
 
-  if (matches.length === 0 && wasCached) {
+  const now = Date.now();
+  const canRefetchChannel = now - channelCacheUpdatedAt >= cacheMissCooldownMs;
+
+  if (matches.length === 0 && wasCached && canRefetchChannel) {
     // Smart Lookup: Cache miss. Re-fetch in case it's a brand new channel
     channelsList = await getChannelsList(true);
     matches = getActiveMatches(channelsList);
@@ -216,7 +226,10 @@ export async function resolveDmChannelId(userId: string): Promise<string> {
   };
 
   let dmId = findDm(channelsList);
-  if (!dmId && wasCached) {
+  const now = Date.now();
+  const canRefetchDm = now - channelCacheUpdatedAt >= cacheMissCooldownMs;
+
+  if (!dmId && wasCached && canRefetchDm) {
     // Smart Lookup: Cache miss. Re-fetch in case DM was just created
     channelsList = await getChannelsList(true);
     dmId = findDm(channelsList);
@@ -224,7 +237,7 @@ export async function resolveDmChannelId(userId: string): Promise<string> {
 
   if (!dmId) {
     throw new Error(
-      `No existing DM channel with user '${userId}'. Send them a direct message first, then schedule.`,
+      `No existing DM channel with user '${userId}'. Ask to send them a direct message first, then schedule.`,
     );
   }
   return dmId;
@@ -242,7 +255,10 @@ export async function resolveUserId(identifier: string): Promise<string> {
   let activeUsersList = usersList.filter((u) => u.status !== "DEACTIVATED");
   let activeMatches = matchUsersByNameOrEmail(identifier, activeUsersList);
 
-  if (activeMatches.length === 0 && wasCached) {
+  const now = Date.now();
+  const canRefetchUser = now - userCacheUpdatedAt >= cacheMissCooldownMs;
+
+  if (activeMatches.length === 0 && wasCached && canRefetchUser) {
     // Smart Lookup: Cache miss. Re-fetch in case it's a new user
     usersList = await getUsersList(true);
     activeUsersList = usersList.filter((u) => u.status !== "DEACTIVATED");
@@ -271,6 +287,8 @@ export function clearCache() {
   channelCache = null;
   userCache = null;
   myInfoCache = null;
+  channelCacheUpdatedAt = 0;
+  userCacheUpdatedAt = 0;
 }
 
 export function updateCachedCustomStatus(status: {
@@ -324,5 +342,110 @@ export function addChannelToCache(channel: { id?: string; name?: string; channel
       users: [],
     });
   }
+}
+
+
+
+export interface BatchResolveInput {
+  users?: string[];
+  channels?: string[];
+  actionName?: string;
+}
+
+export interface BatchResolveOutput {
+  userIds?: string[];
+  channelIds?: string[];
+}
+
+export async function resolveBatch(input: BatchResolveInput): Promise<BatchResolveOutput> {
+  const actionName = input.actionName || "execute action";
+  const errors: string[] = [];
+  const validDetails: string[] = [];
+
+  let resolvedUserIds: string[] | undefined;
+  let resolvedChannelIds: string[] | undefined;
+
+  // Dispatch both promises concurrently
+  const [userResults, channelResults] = await Promise.all([
+    input.users && input.users.length > 0
+      ? Promise.allSettled(input.users.map(async (u) => ({ identifier: u, id: await resolveUserId(u) })))
+      : Promise.resolve([]),
+
+    input.channels && input.channels.length > 0
+      ? Promise.allSettled(input.channels.map(async (c) => ({ identifier: c, id: await resolveChannelId(c) })))
+      : Promise.resolve([])
+  ]);
+
+  // 1. Process User Results
+  if (userResults.length > 0) {
+    const validUsers: string[] = [];
+    const notFoundUsers: string[] = [];
+    const ids: string[] = [];
+
+    for (let i = 0; i < userResults.length; i++) {
+      const r = userResults[i];
+      if (r.status === "fulfilled") {
+        validUsers.push(r.value.identifier);
+        ids.push(r.value.id);
+      } else {
+        const msg = r.reason?.message || "";
+        if (msg.includes("matches multiple") || msg.includes("is deactivated")) {
+          errors.push(msg);
+        } else {
+          notFoundUsers.push(input.users![i]);
+        }
+      }
+    }
+
+    if (notFoundUsers.length > 0) {
+      errors.push(`Could not be identified in workspace (user): ${notFoundUsers.map(u => `'${u}'`).join(", ")}`);
+    }
+    if (validUsers.length > 0) {
+      validDetails.push(`user(s): ${validUsers.map(u => `'${u}'`).join(", ")}`);
+    }
+    resolvedUserIds = Array.from(new Set(ids));
+  }
+
+  // 2. Process Channel Results
+  if (channelResults.length > 0) {
+    const validChannels: string[] = [];
+    const notFoundChannels: string[] = [];
+    const ids: string[] = [];
+
+    for (let i = 0; i < channelResults.length; i++) {
+      const r = channelResults[i];
+      if (r.status === "fulfilled") {
+        validChannels.push(r.value.identifier);
+        ids.push(r.value.id);
+      } else {
+        const msg = r.reason?.message || "";
+        if (msg.includes("matches multiple") || msg.includes("is archived")) {
+          errors.push(msg);
+        } else {
+          notFoundChannels.push(input.channels![i]);
+        }
+      }
+    }
+
+    if (notFoundChannels.length > 0) {
+      errors.push(`Could not be identified in workspace (channel): ${notFoundChannels.map(c => `'${c}'`).join(", ")}`);
+    }
+    if (validChannels.length > 0) {
+      validDetails.push(`channel(s): ${validChannels.map(c => `'${c}'`).join(", ")}`);
+    }
+    resolvedChannelIds = Array.from(new Set(ids));
+  }
+
+  // 3. Comprehensive Abort
+  if (errors.length > 0) {
+    const validSummary = validDetails.length > 0 ? validDetails.join("; ") : "none";
+    throw new Error(
+      `Cannot ${actionName}: ${errors.join("; ")}.\n` +
+      `Identified in workspace: ${validSummary}.\n` +
+      `STOP: Missing entities do not exist in workspace.`
+    );
+  }
+
+  return { userIds: resolvedUserIds, channelIds: resolvedChannelIds };
 }
 

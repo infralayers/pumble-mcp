@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addUsersToChannel, addUsersToChannelSchema } from "../../src/tools/addUsersToChannel.js";
+import { clearCache } from "../../src/tools/resolve.js";
 
 describe("addUsersToChannelSchema", () => {
   it("rejects when channelIdentifier is missing", () => {
@@ -18,6 +19,7 @@ describe("addUsersToChannelSchema", () => {
 
 describe("addUsersToChannel", () => {
   beforeEach(() => {
+    clearCache();
     process.env.PUMBLE_API_KEY = "test-key";
   });
 
@@ -44,17 +46,16 @@ describe("addUsersToChannel", () => {
     });
     await addUsersToChannel(input);
 
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    const [addUsersUrl, addUsersOptions] = fetchMock.mock.calls[3];
-    expect(addUsersUrl.toString()).toBe("https://pumble-api-keys.addons.marketplace.cake.com/addUsersToChannel");
-    const body = JSON.parse(addUsersOptions.body);
+    const addUsersCall = fetchMock.mock.calls.find((c: any) => c[0].toString().includes("addUsersToChannel"));
+    expect(addUsersCall).toBeDefined();
+    const body = JSON.parse(addUsersCall![1].body);
     expect(body.channelId).toBe("chan1");
     expect(body.userIds).toContain("usr1");
     expect(body.userIds).toContain("usr2");
     expect(body.userIds).toContain("123456789012345678901234");
   });
 
-  it("throws an error if a user cannot be resolved", async () => {
+  it("throws an error if any user cannot be resolved (atomic fail-fast)", async () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
       if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "chan1" } }]) });
@@ -67,8 +68,8 @@ describe("addUsersToChannel", () => {
       channelIdentifier: "chan1",
       userIdentifiers: ["Jordan Blake", "Ghost User"],
     });
-    
-    await expect(addUsersToChannel(input)).rejects.toThrow(/User 'Ghost User' could not be found/);
+
+    await expect(addUsersToChannel(input)).rejects.toThrow(/Could not be identified in workspace \(user\): 'Ghost User'/);
   });
 
   it("throws an error instead of silently picking a match when the name is ambiguous", async () => {

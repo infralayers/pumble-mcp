@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createScheduledMessage, createScheduledMessageSchema } from "../../src/tools/createScheduledMessage.js";
+import { clearCache } from "../../src/tools/resolve.js";
 
 describe("createScheduledMessageSchema", () => {
   it("rejects when neither channelIdentifier nor userIdentifier is missing", () => {
@@ -43,6 +44,7 @@ describe("createScheduledMessageSchema", () => {
 
 describe("createScheduledMessage", () => {
   beforeEach(() => {
+    clearCache();
     process.env.PUMBLE_API_KEY = "test-key";
   });
 

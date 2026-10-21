@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { listScheduledMessages, listScheduledMessagesSchema } from "../../src/tools/listScheduledMessages.js";
+import { clearCache } from "../../src/tools/resolve.js";
 
 describe("listScheduledMessagesSchema", () => {
   it("accepts empty input", () => {
@@ -25,6 +26,7 @@ describe("listScheduledMessagesSchema", () => {
 
 describe("listScheduledMessages", () => {
   beforeEach(() => {
+    clearCache();
     process.env.PUMBLE_API_KEY = "test-key";
   });
 
