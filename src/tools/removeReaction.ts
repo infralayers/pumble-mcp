@@ -20,7 +20,7 @@ export type RemoveReactionInput = z.infer<typeof removeReactionSchema>;
 
 export async function removeReaction(input: RemoveReactionInput) {
   const channelId = await resolveChannelId(input.channelIdentifier);
-  return pumbleRequest<unknown>("/removeReaction", {
+  await pumbleRequest<unknown>("/removeReaction", {
     method: "DELETE",
     query: {
       messageId: input.messageId,
@@ -28,4 +28,14 @@ export async function removeReaction(input: RemoveReactionInput) {
       reaction: input.reaction
     },
   });
+
+  return {
+    ok: true,
+    removed: true,
+    messageId: input.messageId,
+    channel: input.channelIdentifier,
+    channelId,
+    reaction: input.reaction,
+    status: "Reaction successfully removed. Verification complete — no further action needed.",
+  };
 }

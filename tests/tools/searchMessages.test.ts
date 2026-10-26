@@ -2,8 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { searchMessages, searchMessagesSchema } from "../../src/tools/searchMessages.js";
 
 describe("searchMessagesSchema", () => {
-  it("rejects when no identifier or text is provided", () => {
+  it("rejects when text is missing", () => {
     const res = searchMessagesSchema.safeParse({});
+    expect(res.success).toBe(false);
+  });
+
+  it("rejects when text is empty string", () => {
+    const res = searchMessagesSchema.safeParse({ text: "" });
     expect(res.success).toBe(false);
   });
 
@@ -12,19 +17,19 @@ describe("searchMessagesSchema", () => {
     expect(res.success).toBe(true);
   });
 
-  it("accepts when fromUserIdentifiers is provided", () => {
-    const res = searchMessagesSchema.safeParse({ fromUserIdentifiers: ["sam"] });
+  it("accepts when text and fromUserIdentifiers are provided", () => {
+    const res = searchMessagesSchema.safeParse({ text: "hello", fromUserIdentifiers: ["sam"] });
     expect(res.success).toBe(true);
   });
 
-  it("accepts when inChannelIdentifiers is provided", () => {
-    const res = searchMessagesSchema.safeParse({ inChannelIdentifiers: ["general"] });
+  it("accepts when text and inChannelIdentifiers are provided", () => {
+    const res = searchMessagesSchema.safeParse({ text: "hello", inChannelIdentifiers: ["general"] });
     expect(res.success).toBe(true);
   });
 
   it("supports singular strings that are coerced to arrays by the backend logic", () => {
-    const res = searchMessagesSchema.safeParse({ fromUserIdentifiers: ["sam"] });
-    expect(res.success).toBe(true);
+    const res = searchMessagesSchema.parse({ text: "hello", fromUserIdentifiers: "sam" });
+    expect(res.fromUserIdentifiers).toEqual(["sam"]);
   });
 });
 
@@ -71,6 +76,7 @@ describe("searchMessages", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const input = searchMessagesSchema.parse({
+      text: "hello",
       fromUserIdentifiers: ["507f1f77bcf86cd799439011"],
       inChannelIdentifiers: ["668e30546a5ea56c5d83f471"],
     });
@@ -96,10 +102,13 @@ describe("searchMessages", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const input = searchMessagesSchema.parse({
+      text: "hello",
       fromUserIdentifiers: ["ghost user"],
     });
 
-    await expect(searchMessages(input)).rejects.toThrow(/User 'ghost user' could not be found/);
+    await expect(searchMessages(input)).rejects.toThrow(
+      /Could not be identified in workspace \(user\): 'ghost user'/,
+    );
   });
 
   it("throws when a channel cannot be resolved", async () => {
@@ -111,10 +120,13 @@ describe("searchMessages", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const input = searchMessagesSchema.parse({
+      text: "hello",
       inChannelIdentifiers: ["ghost channel"],
     });
 
-    await expect(searchMessages(input)).rejects.toThrow(/Channel with name 'ghost channel' could not be found/);
+    await expect(searchMessages(input)).rejects.toThrow(
+      /Could not be identified in workspace \(channel\): 'ghost channel'/,
+    );
   });
 
   it("passes date filters (after and before) to the backend", async () => {
@@ -135,5 +147,23 @@ describe("searchMessages", () => {
     const body = JSON.parse(apiCall[1].body);
     expect(body.after).toBe("2026-01-01T00:00:00Z");
     expect(body.before).toBe("2026-08-01T00:00:00Z");
+  });
+
+  it("throws when any user in fromUserIdentifiers cannot be resolved (strict atomicity)", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "507f1f77bcf86cd799439021", name: "sam" }]) });
+      return Promise.resolve({ ok: true, text: async () => JSON.stringify({ messages: [{ text: "found" }] }) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = searchMessagesSchema.parse({
+      text: "query",
+      fromUserIdentifiers: ["sam", "ghost user"],
+    });
+
+    await expect(searchMessages(input)).rejects.toThrow(
+      /Could not be identified in workspace \(user\): 'ghost user'/,
+    );
   });
 });

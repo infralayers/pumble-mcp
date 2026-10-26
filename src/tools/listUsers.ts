@@ -9,5 +9,16 @@ export const listUsersSchema = z.object(listUsersShape).strict();
 export type ListUsersInput = z.infer<typeof listUsersSchema>;
 
 export async function listUsers(_input: ListUsersInput) {
-  return pumbleRequest<unknown[]>("/listUsers", { method: "GET" });
+  const raw = await pumbleRequest<any[]>("/listUsers", { method: "GET" });
+  return (Array.isArray(raw) ? raw : []).map((u: any) => {
+    const res: Record<string, any> = {
+      id: u.id,
+      name: u.name,
+      realName: u.realName,
+      email: u.email,
+      status: u.status,
+    };
+    if (u.bot) res.isBot = true;
+    return res;
+  });
 }

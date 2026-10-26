@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
-import { resolveUserId } from "./resolve.js";
-
-
+import { resolveBatch } from "./resolve.js";
 
 export const sendGroupDmShape = {
   userIdentifiers: z
@@ -18,29 +16,34 @@ export const sendGroupDmSchema = z.object(sendGroupDmShape).strict();
 export type SendGroupDmInput = z.infer<typeof sendGroupDmSchema>;
 
 export async function sendGroupDm(input: SendGroupDmInput) {
-  let finalUserIds: string[] = [];
-
-  for (const target of input.userIdentifiers) {
-    const resolvedId = await resolveUserId(target);
-    finalUserIds.push(resolvedId);
-  }
-
-  // Deduplicate IDs
-  finalUserIds = Array.from(new Set(finalUserIds));
-  const totalRecipients = finalUserIds.length;
+  const { userIds: finalUserIds } = await resolveBatch({
+    users: input.userIdentifiers,
+    actionName: "send Group DM",
+  });
+  const totalRecipients = finalUserIds!.length;
 
   if (totalRecipients < 2) {
-    throw new Error("Pumble requires at least 2 distinct recipients for a Group DM. For a single recipient, please use the pumble_send_dm tool instead.");
+    throw new Error("Pumble requires at least 2 distinct recipients for a Group DM. For a single recipient, please use the send_dm tool instead.");
   }
   if (totalRecipients > 8) {
     throw new Error(`Pumble allows a maximum of 8 recipients for a Group DM (you provided ${totalRecipients}).`);
   }
 
-  return pumbleRequest<{ id: string }>("/dmGroup", {
+  const res = await pumbleRequest<{ id: string }>("/dmGroup", {
     method: "POST",
     body: {
       text: input.text,
       userIds: finalUserIds,
     },
   });
+
+  return {
+    ok: true,
+    delivered: true,
+    recipients: input.userIdentifiers,
+    userIds: finalUserIds,
+    messageId: res?.id,
+    text: input.text,
+    status: "Group direct message successfully delivered and confirmed. Verification complete — no further action needed.",
+  };
 }

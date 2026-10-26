@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getChannel, getChannelSchema } from "../../src/tools/getChannel.js";
+import { clearCache } from "../../src/tools/resolve.js";
 
 describe("getChannelSchema", () => {
   it("rejects when channelIdentifier is missing", () => {
@@ -18,6 +19,7 @@ describe("getChannelSchema", () => {
 describe("getChannel", () => {
   beforeEach(() => {
     process.env.PUMBLE_API_KEY = "test-key";
+    clearCache();
   });
 
   afterEach(() => {
@@ -89,10 +91,11 @@ describe("getChannel", () => {
   });
 
   it("throws an error if channel name cannot be resolved", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify([]),
-      });
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([]) });
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const input = getChannelSchema.parse({ channelIdentifier: "nonexistent" });
