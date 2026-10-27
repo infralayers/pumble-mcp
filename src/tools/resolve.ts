@@ -2,47 +2,73 @@ import { pumbleRequest } from "../pumbleClient.js";
 
 const ID_PATTERN = /^[0-9a-fA-F]{24}$/;
 
-// === SMART CACHE ===
+// === SMART CACHE (Unified 60s Single Source of Truth) ===
 export let channelCache: PumbleChannelListItem[] | null = null;
 export let userCache: PumbleUser[] | null = null;
 export let myInfoCache: any | null = null;
 export let channelCacheUpdatedAt = 0;
 export let userCacheUpdatedAt = 0;
-export let cacheMissCooldownMs = 3000;
+export let myInfoCacheUpdatedAt = 0;
+export const DEFAULT_CACHE_TTL_MS = 60_000; // 60 seconds
+export let cacheMissCooldownMs = DEFAULT_CACHE_TTL_MS;
 
 export function setCacheMissCooldownMs(ms: number) {
   cacheMissCooldownMs = ms;
 }
 
 export async function getChannelsList(forceRefresh = false): Promise<PumbleChannelListItem[]> {
-  if (channelCache && !forceRefresh) return channelCache;
+  const now = Date.now();
+  const isFresh = channelCache !== null && now - channelCacheUpdatedAt < cacheMissCooldownMs;
+  // If cache is populated and within the 60s cooldown window, strictly return cached data
+  if (channelCache && (!forceRefresh || isFresh)) return channelCache;
+
   const raw = await pumbleRequest<any[]>("/listChannels", { method: "GET" });
   channelCacheUpdatedAt = Date.now();
-  channelCache = (Array.isArray(raw) ? raw : []).map((c: any) => ({
-    channel: {
-      id: c.channel?.id,
-      name: c.channel?.name,
-      channelType: c.channel?.channelType,
-      isArchived: Boolean(c.channel?.isArchived),
-    },
-    users: c.users,
-  })) as PumbleChannelListItem[];
+  channelCache = (Array.isArray(raw) ? raw : []).map((c: any) => {
+    const ch = c.channel || c;
+    return {
+      channel: {
+        id: ch.id,
+        name: ch.name,
+        channelType: ch.channelType,
+        isArchived: Boolean(ch.isArchived),
+        creator: ch.creator || c.creator,
+        createdAt: ch.createdAt || c.createdAt,
+        topic: ch.topic,
+        description: ch.description,
+      },
+      users: c.users,
+    };
+  }) as PumbleChannelListItem[];
   return channelCache;
 }
 
 export async function getUsersList(forceRefresh = false): Promise<PumbleUser[]> {
-  if (userCache && !forceRefresh) return userCache;
+  const now = Date.now();
+  const isFresh = userCache !== null && now - userCacheUpdatedAt < cacheMissCooldownMs;
+  // If cache is populated and within the 60s cooldown window, strictly return cached data
+  if (userCache && (!forceRefresh || isFresh)) return userCache;
+
   const raw = await pumbleRequest<any[]>("/listUsers", { method: "GET" });
   userCacheUpdatedAt = Date.now();
   userCache = (Array.isArray(raw) ? raw : []).map((u: any) => ({
-    id: u.id, name: u.name, realName: u.realName, email: u.email, status: u.status,
+    id: u.id,
+    name: u.name,
+    realName: u.realName,
+    email: u.email,
+    status: u.status,
+    bot: Boolean(u.bot),
   })) as PumbleUser[];
   return userCache;
 }
 
 export async function getMyInfoCached(forceRefresh = false): Promise<any> {
-  if (myInfoCache && !forceRefresh) return myInfoCache;
+  const now = Date.now();
+  const isFresh = myInfoCache !== null && now - myInfoCacheUpdatedAt < cacheMissCooldownMs;
+  if (myInfoCache && (!forceRefresh || isFresh)) return myInfoCache;
+
   myInfoCache = await pumbleRequest<any>("/myInfo", { method: "GET" });
+  myInfoCacheUpdatedAt = Date.now();
   return myInfoCache;
 }
 
@@ -65,6 +91,10 @@ export interface PumbleChannelListItem {
     name?: string;
     channelType?: string;
     isArchived?: boolean;
+    creator?: string;
+    createdAt?: string;
+    topic?: string;
+    description?: string;
   };
   users?: string[];
 }
@@ -75,6 +105,7 @@ export interface PumbleUser {
   realName?: string;
   email?: string;
   status?: string;
+  bot?: boolean;
 }
 
 export function isLikelyId(identifier: string): boolean {
@@ -149,6 +180,17 @@ export function matchUsersByNameOrEmail(identifier: string, usersList: PumbleUse
   });
 }
 
+export function isResolutionError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    msg.includes("could not be found in the workspace") ||
+    msg.includes("Could not be identified in workspace") ||
+    msg.includes("matches multiple") ||
+    msg.includes("is deactivated") ||
+    msg.includes("is archived")
+  );
+}
+
 export function describeChannelCandidates(matches: PumbleChannelListItem[]): string {
   return matches.map((c) => `${c.channel?.name} (id: ${c.channel?.id})`).join(", ");
 }
@@ -170,11 +212,8 @@ export async function resolveChannelId(identifier: string): Promise<string> {
 
   let matches = getActiveMatches(channelsList);
 
-  const now = Date.now();
-  const canRefetchChannel = now - channelCacheUpdatedAt >= cacheMissCooldownMs;
-
-  if (matches.length === 0 && wasCached && canRefetchChannel) {
-    // Smart Lookup: Cache miss. Re-fetch in case it's a brand new channel
+  // If cache miss, attempt refresh (getChannelsList internally enforces the 60s cooldown)
+  if (matches.length === 0 && wasCached) {
     channelsList = await getChannelsList(true);
     matches = getActiveMatches(channelsList);
   }
@@ -197,13 +236,27 @@ export async function resolveChannelId(identifier: string): Promise<string> {
     throw new Error(`Channel '${identifier}' is archived and cannot be targeted.`);
   }
 
-  const available = channelsList
-    .filter((c) => !c.channel?.isArchived)
-    .map((c) => `#${c.channel?.name}`)
-    .filter(Boolean)
-    .join(", ");
-  const hint = available ? ` Available channels: ${available}.` : "";
-  throw new Error(`Channel with name '${identifier}' could not be found in the workspace.${hint}`);
+  // If explicitly prefixed with '#', this is strictly a channel identifier; do not fall back to users
+  if (identifier.trim().startsWith("#")) {
+    throw new Error(`Channel with name '${identifier}' could not be found in the workspace.`);
+  }
+
+  // Fallback: If not found in channels, check if identifier targets a workspace user's DM
+  try {
+    const userId = await resolveUserId(identifier);
+    return await resolveDmChannelId(userId);
+  } catch (userErr) {
+    const userErrMsg = userErr instanceof Error ? userErr.message : String(userErr);
+    if (
+      userErrMsg.includes("No existing DM channel") ||
+      userErrMsg.includes("is deactivated") ||
+      userErrMsg.includes("matches multiple users")
+    ) {
+      throw userErr;
+    }
+
+    throw new Error(`Channel with name '${identifier}' could not be found in the workspace.`);
+  }
 }
 
 /**
@@ -226,11 +279,8 @@ export async function resolveDmChannelId(userId: string): Promise<string> {
   };
 
   let dmId = findDm(channelsList);
-  const now = Date.now();
-  const canRefetchDm = now - channelCacheUpdatedAt >= cacheMissCooldownMs;
 
-  if (!dmId && wasCached && canRefetchDm) {
-    // Smart Lookup: Cache miss. Re-fetch in case DM was just created
+  if (!dmId && wasCached) {
     channelsList = await getChannelsList(true);
     dmId = findDm(channelsList);
   }
@@ -255,11 +305,7 @@ export async function resolveUserId(identifier: string): Promise<string> {
   let activeUsersList = usersList.filter((u) => u.status !== "DEACTIVATED");
   let activeMatches = matchUsersByNameOrEmail(identifier, activeUsersList);
 
-  const now = Date.now();
-  const canRefetchUser = now - userCacheUpdatedAt >= cacheMissCooldownMs;
-
-  if (activeMatches.length === 0 && wasCached && canRefetchUser) {
-    // Smart Lookup: Cache miss. Re-fetch in case it's a new user
+  if (activeMatches.length === 0 && wasCached) {
     usersList = await getUsersList(true);
     activeUsersList = usersList.filter((u) => u.status !== "DEACTIVATED");
     activeMatches = matchUsersByNameOrEmail(identifier, activeUsersList);
@@ -272,7 +318,29 @@ export async function resolveUserId(identifier: string): Promise<string> {
     if (matchedDeactivatedUser) {
       throw new Error(`User '${identifier}' is deactivated and cannot be resolved.`);
     }
-    throw new Error(`User '${identifier}' could not be found in the workspace.`);
+
+    const trimmed = identifier.trim().toLowerCase();
+    const prefix = trimmed.slice(0, 2);
+    const closeMatches = prefix.length >= 2
+      ? activeUsersList
+          .filter((u) => {
+            const n = (u.name || "").toLowerCase();
+            const rn = (u.realName || "").toLowerCase();
+            return n.startsWith(prefix) || rn.startsWith(prefix);
+          })
+          .slice(0, 4)
+          .map((u) => `'${u.realName || u.name}'`)
+      : [];
+
+    if (closeMatches.length > 0) {
+      throw new Error(
+        `User '${identifier}' could not be found in the workspace directory. Close matches: ${closeMatches.join(", ")}.\nSTRICT RULE: Do NOT pick a candidate autonomously.`
+      );
+    }
+
+    throw new Error(
+      `User '${identifier}' could not be found in the workspace directory (no close matches found).\nSTRICT RULE: Do NOT pick a candidate autonomously.`
+    );
   }
 
   if (activeMatches.length > 1) {
@@ -289,6 +357,8 @@ export function clearCache() {
   myInfoCache = null;
   channelCacheUpdatedAt = 0;
   userCacheUpdatedAt = 0;
+  myInfoCacheUpdatedAt = 0;
+  cacheMissCooldownMs = DEFAULT_CACHE_TTL_MS;
 }
 
 export function updateCachedCustomStatus(status: {
@@ -343,8 +413,6 @@ export function addChannelToCache(channel: { id?: string; name?: string; channel
     });
   }
 }
-
-
 
 export interface BatchResolveInput {
   users?: string[];
@@ -442,7 +510,7 @@ export async function resolveBatch(input: BatchResolveInput): Promise<BatchResol
     throw new Error(
       `Cannot ${actionName}: ${errors.join("; ")}.\n` +
       `Identified in workspace: ${validSummary}.\n` +
-      `STOP: Missing entities do not exist in workspace.`
+      `STRICT RULE: Do NOT execute partial batches or substitute missing members autonomously. Report missing entities to the caller.`
     );
   }
 

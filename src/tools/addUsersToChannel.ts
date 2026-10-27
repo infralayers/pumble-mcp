@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
-import { resolveChannelId, resolveBatch, addUsersToCachedChannel } from "./resolve.js";
+import { resolveChannelId, resolveBatch, addUsersToCachedChannel, getChannelsList } from "./resolve.js";
 
 export const addUsersToChannelShape = {
   channelIdentifier: z.string().min(1).describe("Channel name, slug, or ID. If not provided, MUST ASK. DO NOT GUESS."),
@@ -16,6 +16,13 @@ export type AddUsersToChannelInput = z.infer<typeof addUsersToChannelSchema>;
 
 export async function addUsersToChannel(input: AddUsersToChannelInput) {
   const targetChannelId = await resolveChannelId(input.channelIdentifier);
+
+  const channelsList = await getChannelsList();
+  const targetChannel = channelsList.find((c) => c.channel?.id === targetChannelId);
+  if (targetChannel?.channel?.channelType === "DIRECT" || targetChannel?.channel?.channelType === "SELF") {
+    throw new Error("Cannot add users to a direct message conversation. Target a public or private channel instead.");
+  }
+
   const { userIds } = await resolveBatch({
     users: input.userIdentifiers,
     actionName: "add users to channel",

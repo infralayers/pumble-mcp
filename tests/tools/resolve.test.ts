@@ -23,7 +23,7 @@ describe("isLikelyId", () => {
   });
 
   it("rejects names and emails", () => {
-    expect(isLikelyId("general")).toBe(false);
+    expect(isLikelyId("test-channel")).toBe(false);
     expect(isLikelyId("a@b.com")).toBe(false);
     expect(isLikelyId("507f1f77bcf86cd79943901")).toBe(false); // 23 chars
     expect(isLikelyId("u1")).toBe(false);
@@ -32,8 +32,8 @@ describe("isLikelyId", () => {
 
 describe("matchChannelsByName / matchUsersByNameOrEmail", () => {
   it("matches case-insensitively", () => {
-    const channels = [{ channel: { id: "c1", name: "General" } }];
-    expect(matchChannelsByName("general", channels)).toHaveLength(1);
+    const channels = [{ channel: { id: "c1", name: "Test-Channel" } }];
+    expect(matchChannelsByName("test-channel", channels)).toHaveLength(1);
 
     const users = [{ id: "u1", name: "Jordan Blake", email: "jordan@example.com" }];
     expect(matchUsersByNameOrEmail("JORDAN@EXAMPLE.COM", users)).toHaveLength(1);
@@ -41,18 +41,18 @@ describe("matchChannelsByName / matchUsersByNameOrEmail", () => {
 
   it("matches channels with leading hash, spaces, underscores, and substrings", () => {
     const channels = [
-      { channel: { id: "c1", name: "General" } },
-      { channel: { id: "c2", name: "office-work" } },
+      { channel: { id: "c1", name: "Test-Channel" } },
+      { channel: { id: "c2", name: "project-work" } },
       { channel: { id: "c3", name: "marketing-announcements" } },
     ];
     // Strips leading '#'
-    expect(matchChannelsByName("#general", channels)).toHaveLength(1);
-    expect(matchChannelsByName("#General", channels)).toHaveLength(1);
+    expect(matchChannelsByName("#test-channel", channels)).toHaveLength(1);
+    expect(matchChannelsByName("#Test-Channel", channels)).toHaveLength(1);
 
     // Spaces and underscores normalize to hyphenated slug
-    expect(matchChannelsByName("office work", channels)).toHaveLength(1);
-    expect(matchChannelsByName("office_work", channels)).toHaveLength(1);
-    expect(matchChannelsByName("#office work", channels)).toHaveLength(1);
+    expect(matchChannelsByName("project work", channels)).toHaveLength(1);
+    expect(matchChannelsByName("project_work", channels)).toHaveLength(1);
+    expect(matchChannelsByName("#project work", channels)).toHaveLength(1);
 
     // Substring match
     expect(matchChannelsByName("marketing", channels)).toHaveLength(1);
@@ -133,6 +133,38 @@ describe("resolveChannelId / resolveUserId", () => {
     await expect(resolveUserId("bob@example.com")).rejects.toThrow(/is deactivated/);
   });
 
+  it("resolveUserId reports close matches with STRICT RULE when prefix matches exist", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify([
+          { id: "u1", name: "Basit Khan", realName: "Basit Khan" },
+          { id: "u2", name: "Barira Ahmed", realName: "Barira Ahmed" },
+        ]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(resolveUserId("basa")).rejects.toThrow(
+      /User 'basa' could not be found in the workspace directory\. Close matches: 'Basit Khan', 'Barira Ahmed'\.\nSTRICT RULE: Do NOT pick a candidate autonomously\./
+    );
+  });
+
+  it("resolveUserId reports no close matches found with STRICT RULE when zero matches exist", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify([
+          { id: "u1", name: "Alice Smith", realName: "Alice Smith" },
+          { id: "u2", name: "Charlie Brown", realName: "Charlie Brown" },
+        ]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(resolveUserId("xyz123")).rejects.toThrow(
+      /User 'xyz123' could not be found in the workspace directory \(no close matches found\)\.\nSTRICT RULE: Do NOT pick a candidate autonomously\./
+    );
+  });
+
   it("resolveUserId filters out DEACTIVATED users during name matching", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -150,11 +182,11 @@ describe("resolveChannelId / resolveUserId", () => {
   it("resolveChannelId returns the single match's id", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      text: async () => JSON.stringify([{ channel: { id: "c1", name: "general" } }]),
+      text: async () => JSON.stringify([{ channel: { id: "c1", name: "test-channel" } }]),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(resolveChannelId("general")).resolves.toBe("c1");
+    await expect(resolveChannelId("test-channel")).resolves.toBe("c1");
   });
 
   it("resolves from cache on second call (Cache Hit)", async () => {
@@ -200,7 +232,7 @@ describe("resolveChannelId / resolveUserId", () => {
   });
 
   it("skips network fetch on Cache Miss if cache was updated within cooldown", async () => {
-    setCacheMissCooldownMs(3000);
+    setCacheMissCooldownMs(60_000);
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       text: async () => JSON.stringify([{ channel: { id: "c_old", name: "old-channel" } }]),
@@ -211,24 +243,51 @@ describe("resolveChannelId / resolveUserId", () => {
     await resolveChannelId("old-channel");
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    // Call 2: Misses cache for "new-channel" within 3s cooldown -> skips network call!
-    await expect(resolveChannelId("new-channel")).rejects.toThrow(/could not be found/);
+    // Call 2: Misses cache for "#new-channel" within 60s cooldown -> skips network call!
+    await expect(resolveChannelId("#new-channel")).rejects.toThrow(/could not be found/);
     expect(fetchMock).toHaveBeenCalledTimes(1); // Still 1 call!
   });
 
-  it("resolveChannelId reports available channels on miss without prompt injections", async () => {
+  it("resolves direct message channel when identifier matches a workspace user name", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) {
+        return Promise.resolve({
+          ok: true,
+          text: async () =>
+            JSON.stringify([
+              { channel: { id: "c_test_channel", name: "test-channel" } },
+              { channel: { id: "c_dm_alpha", channelType: "DIRECT" }, users: ["u_alpha"] },
+            ]),
+        });
+      }
+      if (u.includes("/listUsers")) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify([{ id: "u_alpha", name: "UserAlpha" }]),
+        });
+      }
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const channelId = await resolveChannelId("UserAlpha");
+    expect(channelId).toBe("c_dm_alpha");
+  });
+
+  it("resolveChannelId reports clean error on miss without dumping channel list", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       text: async () =>
         JSON.stringify([
-          { channel: { id: "c1", name: "office-work" } },
-          { channel: { id: "c2", name: "general" } },
+          { channel: { id: "c1", name: "project-work" } },
+          { channel: { id: "c2", name: "test-channel" } },
         ]),
     });
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(resolveChannelId("home work")).rejects.toThrow(
-      "Channel with name 'home work' could not be found in the workspace. Available channels: #office-work, #general."
+      "Channel with name 'home work' could not be found in the workspace."
     );
   });
 
@@ -291,7 +350,7 @@ describe("resolveChannelId / resolveUserId", () => {
   it("updates cached channel users in-place without invalidating cache", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      text: async () => JSON.stringify([{ channel: { id: "c1", name: "general" }, users: ["u1"] }]),
+      text: async () => JSON.stringify([{ channel: { id: "c1", name: "test-channel" }, users: ["u1"] }]),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -313,7 +372,7 @@ describe("resolveChannelId / resolveUserId", () => {
   it("adds newly created channel to cache in-place", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      text: async () => JSON.stringify([{ channel: { id: "c1", name: "general" } }]),
+      text: async () => JSON.stringify([{ channel: { id: "c1", name: "test-channel" } }]),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -365,15 +424,15 @@ describe("resolveBatch", () => {
   it("resolves both users and channels concurrently when all are valid", async () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
-      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "c1", name: "general" } }]) });
-      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "u1", name: "Alice" }]) });
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "c1", name: "test-channel" } }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "u1", name: "UserAlpha" }]) });
       return Promise.resolve({ ok: true, text: async () => "{}" });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await resolveBatch({
-      users: ["Alice"],
-      channels: ["general"],
+      users: ["UserAlpha"],
+      channels: ["test-channel"],
       actionName: "test concurrent",
     });
 
@@ -384,20 +443,20 @@ describe("resolveBatch", () => {
   it("throws with formatted error when both user and channel are missing", async () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
-      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "c1", name: "general" } }]) });
-      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "u1", name: "Alice" }]) });
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "c1", name: "test-channel" } }]) });
+      if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "u1", name: "UserAlpha" }]) });
       return Promise.resolve({ ok: true, text: async () => "{}" });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
       resolveBatch({
-        users: ["Alice", "MissingUser"],
-        channels: ["general", "MissingChannel"],
+        users: ["UserAlpha", "MissingUser"],
+        channels: ["test-channel", "MissingChannel"],
         actionName: "search messages",
       })
     ).rejects.toThrow(
-      /Cannot search messages: Could not be identified in workspace \(user\): 'MissingUser'; Could not be identified in workspace \(channel\): 'MissingChannel'\.\nIdentified in workspace: user\(s\): 'Alice'; channel\(s\): 'general'\.\nSTOP: Missing entities do not exist in workspace\./
+      /Cannot search messages: Could not be identified in workspace \(user\): 'MissingUser'; Could not be identified in workspace \(channel\): 'MissingChannel'\.\nIdentified in workspace: user\(s\): 'UserAlpha'; channel\(s\): 'test-channel'\.\nSTRICT RULE: Do NOT execute partial batches or substitute missing members autonomously\. Report missing entities to the caller\./
     );
   });
 });

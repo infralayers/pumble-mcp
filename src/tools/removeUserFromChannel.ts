@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { pumbleRequest } from "../pumbleClient.js";
-import { resolveChannelId, resolveUserId, removeUserFromCachedChannel } from "./resolve.js";
+import { resolveChannelId, resolveUserId, removeUserFromCachedChannel, getChannelsList } from "./resolve.js";
 import { getChannel } from "./getChannel.js";
 
 export const removeUserFromChannelShape = {
@@ -9,7 +9,7 @@ export const removeUserFromChannelShape = {
   confirm: z.literal(true, {
     errorMap: () => ({ message: "You MUST explicitly set confirm: true to perform this destructive operation" })
   }).describe("Explicit confirmation boolean. Must be true. (Do not guess)"),
-  confirmationToken: z.string().optional().describe("One-time security confirmation token authorized by the human user."),
+  confirmationToken: z.string().optional().describe("One-time security confirmation token authorized by the caller."),
 };
 
 export const removeUserFromChannelSchema = z.object(removeUserFromChannelShape).strict();
@@ -21,6 +21,12 @@ export async function removeUserFromChannel(input: RemoveUserFromChannelInput) {
     resolveChannelId(input.channelIdentifier),
     resolveUserId(input.userIdentifier)
   ]);
+
+  const channelsList = await getChannelsList();
+  const targetChannel = channelsList.find((c) => c.channel?.id === targetChannelId);
+  if (targetChannel?.channel?.channelType === "DIRECT" || targetChannel?.channel?.channelType === "SELF") {
+    throw new Error("Cannot remove users from a direct message conversation. Target a public or private channel instead.");
+  }
 
   try {
     await pumbleRequest<unknown>("/removeUserFromChannel", {

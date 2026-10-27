@@ -38,7 +38,7 @@ describe("removeUserFromChannel", () => {
       .mockResolvedValueOnce({ // listChannels
         ok: true,
         text: async () => JSON.stringify([
-          { channel: { id: "chan1", name: "general" } }
+          { channel: { id: "chan1", name: "test-channel" } }
         ]),
       })
       .mockResolvedValueOnce({ // listUsers
@@ -55,7 +55,7 @@ describe("removeUserFromChannel", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const input = removeUserFromChannelSchema.parse({
-      channelIdentifier: "general",
+      channelIdentifier: "test-channel",
       userIdentifier: "Jordan Blake",
       confirm: true
     });
@@ -118,7 +118,7 @@ describe("removeUserFromChannel", () => {
   it("throws an error if the channel name cannot be resolved", async () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
-      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "general" } }]) });
+      if (u.includes("/listChannels")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ channel: { id: "chan1", name: "test-channel" } }]) });
       if (u.includes("/listUsers")) return Promise.resolve({ ok: true, text: async () => JSON.stringify([{ id: "usr1", name: "Jordan Blake" }]) });
       return Promise.resolve({ ok: true, text: async () => "{}" });
     });
@@ -155,5 +155,77 @@ describe("removeUserFromChannel", () => {
     const body = JSON.parse(removeCall[1].body as string);
     expect(body.userId).toBe("usr1");
     expect(body.channelId).toBe("507f1f77bcf86cd799439011");
+  });
+
+  it("rejects when channel resolves to a direct message channel via username", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify([
+            { channel: { id: "c_dm_alpha", channelType: "DIRECT" }, users: ["usr_alpha", "usr_me"] }
+          ])
+        });
+      }
+      if (u.includes("/listUsers")) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify([
+            { id: "usr_alpha", name: "UserAlpha" },
+            { id: "usr_beta", name: "UserBeta" }
+          ])
+        });
+      }
+      if (u.includes("/myInfo")) {
+        return Promise.resolve({ ok: true, text: async () => JSON.stringify({ id: "usr_me" }) });
+      }
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = removeUserFromChannelSchema.parse({
+      channelIdentifier: "UserAlpha",
+      userIdentifier: "UserBeta",
+      confirm: true,
+    });
+
+    await expect(removeUserFromChannel(input)).rejects.toThrow(
+      "Cannot remove users from a direct message conversation. Target a public or private channel instead."
+    );
+  });
+
+  it("rejects when channel ID directly corresponds to a direct message channel", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify([
+            { channel: { id: "507f1f77bcf86cd799439011", channelType: "DIRECT" }, users: ["usr_alpha", "usr_me"] }
+          ])
+        });
+      }
+      if (u.includes("/listUsers")) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify([
+            { id: "usr_beta", name: "UserBeta" }
+          ])
+        });
+      }
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = removeUserFromChannelSchema.parse({
+      channelIdentifier: "507f1f77bcf86cd799439011",
+      userIdentifier: "UserBeta",
+      confirm: true,
+    });
+
+    await expect(removeUserFromChannel(input)).rejects.toThrow(
+      "Cannot remove users from a direct message conversation. Target a public or private channel instead."
+    );
   });
 });

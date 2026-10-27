@@ -28,6 +28,8 @@ import { deleteScheduledMessage, deleteScheduledMessageSchema, deleteScheduledMe
 import { getMyInfo, getMyInfoSchema, getMyInfoShape } from "./tools/getMyInfo.js";
 import { listUserGroups, listUserGroupsSchema, listUserGroupsShape } from "./tools/listUserGroups.js";
 import { updateCustomStatus, updateCustomStatusSchema, updateCustomStatusShape } from "./tools/updateCustomStatus.js";
+import { getMessage, getMessageSchema, getMessageShape } from "./tools/getMessage.js";
+import { deleteMessage, deleteMessageSchema, deleteMessageShape } from "./tools/deleteMessage.js";
 
 if (!process.env.PUMBLE_API_KEY) {
   console.error("PUMBLE_API_KEY environment variable is not set");
@@ -44,19 +46,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Phase 3: Observability & Error Handling
 import { logStderr } from "./logger.js";
+import { EnvironmentFSM } from "./guardrails/environmentFSM.js";
+import { isResolutionError } from "./tools/resolve.js";
 
-
-let lastExecutionErrorTime = 0;
-let lastExecutionErrorMessage = "";
-
-interface SecurityChallenge {
-  token: string;
-  expiresAt: number;
-}
-const activeChallenges = new Map<string, SecurityChallenge>();
-function generateToken(): string {
-  return `AUTH-${Math.floor(1000 + Math.random() * 9000)}`;
-}
+export const environmentFSM = new EnvironmentFSM();
 
 function cleanErrorMessage(error: unknown): string {
   if (error instanceof z.ZodError) {
@@ -72,100 +65,63 @@ function cleanErrorMessage(error: unknown): string {
   return lines.join("\n").trim();
 }
 
+/**
+ * Recursively strips nulls and empty metadata arrays to minimize LLM token consumption,
+ * while preserving primary collection arrays (e.g. messages: []).
+ */
+export function pruneEmptyValues(val: unknown, keyName?: string): unknown {
+  if (val === null || val === undefined) return undefined;
+  if (typeof val === "string") return val;
+  if (Array.isArray(val)) {
+    if (val.length === 0) {
+      if (keyName === "messages" || keyName === "channels" || keyName === "users" || keyName === "scheduledMessages") {
+        return [];
+      }
+      return undefined;
+    }
+    return val.map((item) => pruneEmptyValues(item)).filter((v) => v !== undefined);
+  }
+  if (typeof val === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(val)) {
+      const pruned = pruneEmptyValues(v, k);
+      if (pruned !== undefined) {
+        out[k] = pruned;
+      }
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+  }
+  return val;
+}
+
 function wrapToolHandler<S extends z.ZodTypeAny>(
   schema: S,
   handler: (input: z.infer<S>) => Promise<any>,
   toolName: string = "tool"
 ) {
   return async (args: unknown) => {
-    const now = Date.now();
+    const token = (args as any)?.confirmationToken;
+    const access = environmentFSM.checkToolAccess(toolName, token);
 
-    // 1. GLOBAL AGENT CASCADE COOLDOWN:
-    // If an execution error occurred within the last 3 seconds, halt rapid automated retries
-    if (now - lastExecutionErrorTime < 3000) {
+    if (!access.allowed) {
       return {
         isError: true,
         content: [
           {
             type: "text" as const,
-            text: `🚨 CRITICAL SECURITY HALT: SYSTEM IN ERROR LOCKDOWN.\nAn execution error recently occurred ("${lastExecutionErrorMessage}").\nYou are strictly FORBIDDEN from executing ANY tools autonomously during cooldown.\nDO NOT attempt fallback tools, retries, or directory searches.\nYOU MUST IMMEDIATELY STOP CALLING TOOLS AND REPORT THE ISSUE TO THE USER FOR GUIDANCE.`,
+            text: access.errorMessage || "Tool execution restricted by circuit breaker.",
           },
         ],
       };
     }
 
-    // 2. TOKEN CHALLENGE GATE FOR BULK DIRECTORY SCAN TOOLS
-    const isBulkReadingTool =
-      toolName.includes("list_channels") ||
-      toolName.includes("list_users");
-
-    if (isBulkReadingTool) {
-      const providedToken = (args as any)?.confirmationToken;
-      const challenge = activeChallenges.get(toolName);
-
-      const isAuthorized =
-        providedToken &&
-        challenge &&
-        challenge.token === providedToken &&
-        now < challenge.expiresAt;
-
-      if (!isAuthorized) {
-        const token = generateToken();
-        activeChallenges.set(toolName, { token, expiresAt: now + 60_000 });
-
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `⛔ BLOCKED: UNNECESSARY DIRECTORY SCAN ATTEMPTED.\nDO NOT CALL THIS TOOL FOR LOOKUPS OR ID RESOLUTION!— all action tools resolve names/slugs natively! Call target tool directly.\nIf the user explicitly requested a full workspace directory, ask the user for confirmation code ${token} to authorize it.`,
-            },
-          ],
-        };
-      }
-
-      // Token consumed and invalidated on successful authorization
-      activeChallenges.delete(toolName);
-    }
-
-    // 3. TOKEN CHALLENGE-RESPONSE GATE FOR DESTRUCTIVE TOOLS
-    const isDestructiveTool =
-      toolName.includes("remove_user") ||
-      toolName.includes("delete_scheduled");
-
-    if (isDestructiveTool) {
-      const providedToken = (args as any)?.confirmationToken;
-      const challenge = activeChallenges.get(toolName);
-
-      const isAuthorized =
-        providedToken &&
-        challenge &&
-        challenge.token === providedToken &&
-        now < challenge.expiresAt;
-
-      if (!isAuthorized) {
-        const token = generateToken();
-        activeChallenges.set(toolName, { token, expiresAt: now + 60_000 });
-
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `⚠️ SECURITY GATE: DESTRUCTIVE WORKSPACE ACTION INTERCEPTED.\nYou cannot execute destructive deletions or user removals autonomously.\nPresent this exact confirmation to the human user:\n"I am about to perform a destructive operation, i need confirmation token for sending it in payload. If you intended this, please reply in chat with confirmation code ${token} to authorize it."\nDO NOT call this tool again until the human explicitly provides this confirmation code in their response.`,
-            },
-          ],
-        };
-      }
-
-      // Token consumed and invalidated on successful authorization
-      activeChallenges.delete(toolName);
-    }
-
     try {
       const input = schema.parse(args);
       const result = await handler(input);
-      return { content: [{ type: "text" as const, text: JSON.stringify(result ?? { ok: true }) }] };
+      // Mutating tools self-heal the circuit breaker to HEALTHY
+      environmentFSM.reportSuccess(toolName);
+      const prunedResult = pruneEmptyValues(result) ?? { ok: true };
+      return { content: [{ type: "text" as const, text: JSON.stringify(prunedResult) }] };
     } catch (error: any) {
       logStderr("Tool execution error:", error?.stack || error?.message || error);
 
@@ -177,13 +133,14 @@ function wrapToolHandler<S extends z.ZodTypeAny>(
         };
       }
 
-      // Runtime / API / Resolution failures: Engage the 3-second global cooldown
-      lastExecutionErrorTime = Date.now();
-      lastExecutionErrorMessage = cleanErrorMessage(error);
+      const errMsg = cleanErrorMessage(error);
+      if (isResolutionError(error)) {
+        environmentFSM.reportResolutionError(toolName, errMsg);
+      }
 
       return {
         isError: true,
-        content: [{ type: "text" as const, text: lastExecutionErrorMessage }],
+        content: [{ type: "text" as const, text: errMsg }],
       };
     }
   };
@@ -193,64 +150,82 @@ function wrapToolHandler<S extends z.ZodTypeAny>(
 server.registerTool(
   "send_message_via_channel_name_or_id",
   {
-    description: "Send a channel message. (NATIVE CHANNEL NAME RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "Send a message to a public or private channel. Resolves channel names natively.",
     inputSchema: sendMessageShape,
   },
-  wrapToolHandler(sendMessageSchema, sendMessage)
+  wrapToolHandler(sendMessageSchema, sendMessage, "send_message_via_channel_name_or_id")
 );
 
 server.registerTool(
-  "list_messages_via_channel_name_or_id",
+  "list_messages_via_name_or_id",
   {
-    description: "List messages in a channel. (NATIVE CHANNEL NAME RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "List messages from a channel or direct message (DM) conversation. Resolves names natively.",
     inputSchema: listMessagesShape,
   },
-  wrapToolHandler(listMessagesSchema, listMessages, "list_messages")
+  wrapToolHandler(listMessagesSchema, listMessages, "list_messages_via_name_or_id")
 );
 
 server.registerTool(
   "edit_message",
   {
-    description: "Edit a previously sent message. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "Edit a previously sent message by ID.",
     inputSchema: editMessageShape,
   },
-  wrapToolHandler(editMessageSchema, editMessage)
+  wrapToolHandler(editMessageSchema, editMessage, "edit_message")
+);
+
+server.registerTool(
+  "delete_message",
+  {
+    description: "Delete a message by ID in a channel. Destructive; requires confirmation code.",
+    inputSchema: deleteMessageShape,
+  },
+  wrapToolHandler(deleteMessageSchema, deleteMessage, "delete_message")
+);
+
+server.registerTool(
+  "get_message_via_id",
+  {
+    description: "Get full details of a specific message by ID and channel name or ID.",
+    inputSchema: getMessageShape,
+  },
+  wrapToolHandler(getMessageSchema, getMessage, "get_message_via_id")
 );
 
 server.registerTool(
   "send_dm_via_name_email_or_id",
   {
-    description: "Send a direct message. (NATIVE NAME/EMAIL RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "Send a 1-on-1 direct message. Resolves user names/emails natively.",
     inputSchema: sendDmShape,
   },
-  wrapToolHandler(sendDmSchema, sendDm)
+  wrapToolHandler(sendDmSchema, sendDm, "send_dm_via_name_email_or_id")
 );
 
 server.registerTool(
   "send_group_dm_via_names_emails_or_ids",
   {
-    description: "Send a group direct message. (NATIVE NAME/EMAIL RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "Send a group direct message to multiple users. Resolves names/emails natively.",
     inputSchema: sendGroupDmShape,
   },
-  wrapToolHandler(sendGroupDmSchema, sendGroupDm)
+  wrapToolHandler(sendGroupDmSchema, sendGroupDm, "send_group_dm_via_names_emails_or_ids")
 );
 
 server.registerTool(
   "get_my_info",
   {
-    description: "Get profile information about the current authenticated user.",
+    description: "Get profile information of the authenticated user/bot.",
     inputSchema: getMyInfoShape,
   },
-  wrapToolHandler(getMyInfoSchema, getMyInfo)
+  wrapToolHandler(getMyInfoSchema, getMyInfo, "get_my_info")
 );
 
 server.registerTool(
   "list_user_groups",
   {
-    description: "List all user groups in the workspace.",
+    description: "List workspace user groups.",
     inputSchema: listUserGroupsShape,
   },
-  wrapToolHandler(listUserGroupsSchema, listUserGroups)
+  wrapToolHandler(listUserGroupsSchema, listUserGroups, "list_user_groups")
 );
 
 server.registerTool(
@@ -259,72 +234,72 @@ server.registerTool(
     description: "Update the custom status of the authenticated user.",
     inputSchema: updateCustomStatusShape,
   },
-  wrapToolHandler(updateCustomStatusSchema, updateCustomStatus)
+  wrapToolHandler(updateCustomStatusSchema, updateCustomStatus, "update_my_custom_status")
 );
 
 server.registerTool(
   "search_messages",
   {
-    description: "Search past message history. WARNING: Pumble search index has a 15-20 second indexing delay for newly posted messages. Do NOT use this tool to locate newly posted messages. (READ-ONLY - DO NOT CALL TO FIND RECIPIENTS, USERS, OR CHANNELS: Message action tools resolve names natively.)",
+    description: "Search message history by text query (~15s indexing delay). Do not use for user/channel ID lookups.",
     inputSchema: searchMessagesShape,
   },
-  wrapToolHandler(searchMessagesSchema, searchMessages)
+  wrapToolHandler(searchMessagesSchema, searchMessages, "search_messages")
 );
 
 server.registerTool(
   "reply_message_via_channel_name_or_id",
   {
-    description: "Reply to a message to create or continue a thread. To start a new thread, first send a message with send_message_via_channel_name_or_id, then reply to it with this tool using the returned messageId. (NATIVE CHANNEL NAME RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "Reply to a message in a channel or DM thread using parent messageId. Resolves names natively.",
     inputSchema: replyMessageShape,
   },
-  wrapToolHandler(replyMessageSchema, replyMessage)
+  wrapToolHandler(replyMessageSchema, replyMessage, "reply_message_via_channel_name_or_id")
 );
 
 server.registerTool(
   "list_thread_replies_via_channel_name_or_id",
   {
-    description: "Fetch all replies for a thread. (NATIVE CHANNEL NAME RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "List all replies in a message thread. Resolves names natively.",
     inputSchema: listThreadRepliesShape,
   },
-  wrapToolHandler(listThreadRepliesSchema, listThreadReplies)
+  wrapToolHandler(listThreadRepliesSchema, listThreadReplies, "list_thread_replies_via_channel_name_or_id")
 );
 
 // === Reactions ===
 server.registerTool(
   "add_reaction",
   {
-    description: "Add a reaction to a message. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "Add an emoji reaction to a message by ID.",
     inputSchema: addReactionShape,
   },
-  wrapToolHandler(addReactionSchema, addReaction)
+  wrapToolHandler(addReactionSchema, addReaction, "add_reaction")
 );
 
 server.registerTool(
   "remove_reaction",
   {
-    description: "Remove a reaction from a message. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "Remove an emoji reaction from a message by ID.",
     inputSchema: removeReactionShape,
   },
-  wrapToolHandler(removeReactionSchema, removeReaction)
+  wrapToolHandler(removeReactionSchema, removeReaction, "remove_reaction")
 );
 
 // === Channels ===
 server.registerTool(
   "list_channels_only_when_user_calls",
   {
-    description: "List all visible channels. (READ-ONLY - DO NOT CALL FOR ID LOOKUP: All message and action tools natively resolve channel names and slugs directly into IDs. Only call if the human user explicitly asks to view the channel directory.)",
+    description: "List all visible channels. Use ONLY when the caller explicitly asks to view the channel directory.",
     inputSchema: listChannelsShape,
   },
-  wrapToolHandler(listChannelsSchema, listChannels, "list_channels")
+  wrapToolHandler(listChannelsSchema, listChannels, "list_channels_only_when_user_calls")
 );
 
 server.registerTool(
   "get_channel_detail_via_channel_name_or_id",
   {
-    description: "Look up a channel's details, accetps hypen and spaces. (READ-ONLY - DO NOT CALL FOR MEMBER/ID LOOKUP: All message and action tools natively resolve channel names and slugs directly into IDs. Only call if the human user explicitly asks to view the channel details.)",
+    description: "Get details of a specific channel. Use ONLY when the caller explicitly requests channel metadata.",
     inputSchema: getChannelShape,
   },
-  wrapToolHandler(getChannelSchema, getChannel)
+  wrapToolHandler(getChannelSchema, getChannel, "get_channel_detail_via_channel_name_or_id")
 );
 
 server.registerTool(
@@ -333,81 +308,81 @@ server.registerTool(
     description: "Create a new public or private channel.",
     inputSchema: createChannelShape,
   },
-  wrapToolHandler(createChannelSchema, createChannel)
+  wrapToolHandler(createChannelSchema, createChannel, "create_channel")
 );
 
 server.registerTool(
   "add_users_to_channel_via_name_or_id",
   {
-    description: "Add users to a channel. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "Add users to a channel by names or emails. Resolves entities natively.",
     inputSchema: addUsersToChannelShape,
   },
-  wrapToolHandler(addUsersToChannelSchema, addUsersToChannel)
+  wrapToolHandler(addUsersToChannelSchema, addUsersToChannel, "add_users_to_channel_via_name_or_id")
 );
 
 server.registerTool(
   "remove_user_from_channel_via_name_or_id",
   {
-    description: "Remove a user from a channel. (NATIVE RESOLUTION - DANGER: REQUIRES EXPLICIT USER CONFIRMATION)",
+    description: "Remove a user from a channel. Destructive; requires confirmation code.",
     inputSchema: removeUserFromChannelShape,
   },
-  wrapToolHandler(removeUserFromChannelSchema, removeUserFromChannel, "remove_user")
+  wrapToolHandler(removeUserFromChannelSchema, removeUserFromChannel, "remove_user_from_channel_via_name_or_id")
 );
 
 // === Workspace & Users ===
 server.registerTool(
   "list_users_not_for_id_lookup",
   {
-    description: "List all workspace users. (READ-ONLY - DO NOT CALL FOR ID LOOKUP: All message and action tools natively resolve user names and emails directly into IDs. Only call if the human user explicitly asks to view the user list.)",
+    description: "List all workspace users. Use ONLY when the caller explicitly asks to view the user directory.",
     inputSchema: listUsersShape,
   },
-  wrapToolHandler(listUsersSchema, listUsers, "list_users")
+  wrapToolHandler(listUsersSchema, listUsers, "list_users_not_for_id_lookup")
 );
 
 // === Scheduled Messages ===
 server.registerTool(
   "list_scheduled_messages",
   {
-    description: "List all scheduled messages. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "List scheduled messages, optionally filtered by channel or user.",
     inputSchema: listScheduledMessagesShape,
   },
-  wrapToolHandler(listScheduledMessagesSchema, listScheduledMessages)
+  wrapToolHandler(listScheduledMessagesSchema, listScheduledMessages, "list_scheduled_messages")
 );
 
 server.registerTool(
   "create_scheduled_message_via_name_or_id",
   {
-    description: "Schedule a message for the future. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "Schedule a message for future delivery to a channel or user.",
     inputSchema: createScheduledMessageShape,
   },
-  wrapToolHandler(createScheduledMessageSchema, createScheduledMessage)
+  wrapToolHandler(createScheduledMessageSchema, createScheduledMessage, "create_scheduled_message_via_name_or_id")
 );
 
 server.registerTool(
   "edit_scheduled_message_via_name_or_id",
   {
-    description: "Edit a scheduled message. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "Edit text, target, or send time of a scheduled message.",
     inputSchema: editScheduledMessageShape,
   },
-  wrapToolHandler(editScheduledMessageSchema, editScheduledMessage)
+  wrapToolHandler(editScheduledMessageSchema, editScheduledMessage, "edit_scheduled_message_via_name_or_id")
 );
 
 server.registerTool(
   "delete_scheduled_message_via_name_or_id",
   {
-    description: "Delete a scheduled message. (NATIVE RESOLUTION - NO LOOKUP REQUIRED)",
+    description: "Delete a scheduled message before delivery. Destructive; requires confirmation code.",
     inputSchema: deleteScheduledMessageShape,
   },
-  wrapToolHandler(deleteScheduledMessageSchema, deleteScheduledMessage, "delete_scheduled")
+  wrapToolHandler(deleteScheduledMessageSchema, deleteScheduledMessage, "delete_scheduled_message_via_name_or_id")
 );
 
 server.registerTool(
   "get_scheduled_message_via_name_or_id",
   {
-    description: "Fetch a scheduled message. (READ-ONLY)",
+    description: "Get details of a specific scheduled message by ID.",
     inputSchema: getScheduledMessageShape,
   },
-  wrapToolHandler(getScheduledMessageSchema, getScheduledMessage)
+  wrapToolHandler(getScheduledMessageSchema, getScheduledMessage, "get_scheduled_message_via_name_or_id")
 );
 // Kick off prefetch asynchronously so it doesn't block the client handshake
 prefetchIdentifiers().catch(err => console.error("Prefetch failed:", err));

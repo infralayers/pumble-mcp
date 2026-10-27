@@ -127,4 +127,74 @@ describe("addUsersToChannel", () => {
     const body = JSON.parse(fetchMock.mock.calls.find((c: any) => c[0].toString().includes("addUsersToChannel"))[1].body);
     expect(body.userIds).toEqual(["usr1"]);
   });
+
+  it("rejects when channel resolves to a direct message channel via username", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify([
+            { channel: { id: "c_dm_alpha", channelType: "DIRECT" }, users: ["usr_alpha", "usr_me"] }
+          ])
+        });
+      }
+      if (u.includes("/listUsers")) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify([
+            { id: "usr_alpha", name: "UserAlpha" },
+            { id: "usr_beta", name: "UserBeta" }
+          ])
+        });
+      }
+      if (u.includes("/myInfo")) {
+        return Promise.resolve({ ok: true, text: async () => JSON.stringify({ id: "usr_me" }) });
+      }
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = addUsersToChannelSchema.parse({
+      channelIdentifier: "UserAlpha",
+      userIdentifiers: ["UserBeta"],
+    });
+
+    await expect(addUsersToChannel(input)).rejects.toThrow(
+      "Cannot add users to a direct message conversation. Target a public or private channel instead."
+    );
+  });
+
+  it("rejects when channel ID directly corresponds to a direct message channel", async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      const u = url.toString();
+      if (u.includes("/listChannels")) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify([
+            { channel: { id: "507f1f77bcf86cd799439011", channelType: "DIRECT" }, users: ["usr_alpha", "usr_me"] }
+          ])
+        });
+      }
+      if (u.includes("/listUsers")) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify([
+            { id: "usr_beta", name: "UserBeta" }
+          ])
+        });
+      }
+      return Promise.resolve({ ok: true, text: async () => "{}" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const input = addUsersToChannelSchema.parse({
+      channelIdentifier: "507f1f77bcf86cd799439011",
+      userIdentifiers: ["UserBeta"],
+    });
+
+    await expect(addUsersToChannel(input)).rejects.toThrow(
+      "Cannot add users to a direct message conversation. Target a public or private channel instead."
+    );
+  });
 });
