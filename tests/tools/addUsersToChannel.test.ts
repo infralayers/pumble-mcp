@@ -128,15 +128,16 @@ describe("addUsersToChannel", () => {
     expect(body.userIds).toEqual(["usr1"]);
   });
 
-  it("rejects when channel resolves to a direct message channel via username", async () => {
+  function setupDmChannelMock() {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const u = url.toString();
       if (u.includes("/listChannels")) {
         return Promise.resolve({
           ok: true,
           text: async () => JSON.stringify([
-            { channel: { id: "c_dm_alpha", channelType: "DIRECT" }, users: ["usr_alpha", "usr_me"] }
-          ])
+            { channel: { id: "c_dm_alpha", channelType: "DIRECT" }, users: ["usr_alpha", "usr_me"] },
+            { channel: { id: "507f1f77bcf86cd799439011", channelType: "DIRECT" }, users: ["usr_alpha", "usr_me"] },
+          ]),
         });
       }
       if (u.includes("/listUsers")) {
@@ -144,8 +145,8 @@ describe("addUsersToChannel", () => {
           ok: true,
           text: async () => JSON.stringify([
             { id: "usr_alpha", name: "UserAlpha" },
-            { id: "usr_beta", name: "UserBeta" }
-          ])
+            { id: "usr_beta", name: "UserBeta" },
+          ]),
         });
       }
       if (u.includes("/myInfo")) {
@@ -154,6 +155,11 @@ describe("addUsersToChannel", () => {
       return Promise.resolve({ ok: true, text: async () => "{}" });
     });
     vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("rejects when channel resolves to a direct message channel via username", async () => {
+    setupDmChannelMock();
 
     const input = addUsersToChannelSchema.parse({
       channelIdentifier: "UserAlpha",
@@ -166,27 +172,7 @@ describe("addUsersToChannel", () => {
   });
 
   it("rejects when channel ID directly corresponds to a direct message channel", async () => {
-    const fetchMock = vi.fn().mockImplementation((url) => {
-      const u = url.toString();
-      if (u.includes("/listChannels")) {
-        return Promise.resolve({
-          ok: true,
-          text: async () => JSON.stringify([
-            { channel: { id: "507f1f77bcf86cd799439011", channelType: "DIRECT" }, users: ["usr_alpha", "usr_me"] }
-          ])
-        });
-      }
-      if (u.includes("/listUsers")) {
-        return Promise.resolve({
-          ok: true,
-          text: async () => JSON.stringify([
-            { id: "usr_beta", name: "UserBeta" }
-          ])
-        });
-      }
-      return Promise.resolve({ ok: true, text: async () => "{}" });
-    });
-    vi.stubGlobal("fetch", fetchMock);
+    setupDmChannelMock();
 
     const input = addUsersToChannelSchema.parse({
       channelIdentifier: "507f1f77bcf86cd799439011",

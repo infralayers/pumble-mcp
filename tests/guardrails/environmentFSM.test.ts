@@ -110,8 +110,19 @@ describe("EnvironmentFSM", () => {
     fsm.reportResolutionError("add_users_to_channel_via_name_or_id", "User 'GhostUser' not found");
     expect(fsm.getState()).toBe("LOCKED");
 
-    // A mutating action succeeds
-    fsm.reportSuccess("send_message_via_channel_name_or_id");
+    // Non-mutating read/investigation tool does not reset circuit
+    fsm.reportSuccess("search_messages");
+    expect(fsm.getState()).toBe("LOCKED");
+
+    // A mutating action succeeds using shorthand string
+    fsm.reportSuccess("send_message");
+    expect(fsm.getState()).toBe("HEALTHY");
+
+    // Trip again to test destructive shorthand
+    fsm.reportResolutionError("add_users_to_channel_via_name_or_id", "User 'GhostUser' not found");
+    expect(fsm.getState()).toBe("LOCKED");
+
+    fsm.reportSuccess("remove_user");
     expect(fsm.getState()).toBe("HEALTHY");
 
     // Action tools are allowed directly

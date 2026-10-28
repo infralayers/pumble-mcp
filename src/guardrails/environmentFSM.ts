@@ -181,9 +181,16 @@ export class EnvironmentFSM {
   /**
    * Called when any mutating tool completes successfully.
    * Self-healing: instantly restores the entire circuit to HEALTHY.
+   * Uses both exact set membership and category resolution to handle
+   * full schema names and normalized/shorthand tool names.
    */
   public reportSuccess(toolName: string): void {
-    if (EnvironmentFSM.MUTATING_TOOLS.has(toolName)) {
+    const category = this.getCategory(toolName);
+    if (
+      category === "ACTION" ||
+      category === "DESTRUCTIVE" ||
+      EnvironmentFSM.MUTATING_TOOLS.has(toolName)
+    ) {
       this.resetToHealthy();
     }
   }
