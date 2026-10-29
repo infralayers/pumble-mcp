@@ -46,10 +46,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Phase 3: Observability & Error Handling
 import { logStderr } from "./logger.js";
-import { EnvironmentFSM } from "./guardrails/environmentFSM.js";
+import {
+  checkToolAccess,
+  reportResolutionError,
+  reportSuccess,
+} from "./guardrails/environmentFSM.js";
 import { isResolutionError } from "./tools/resolve.js";
-
-export const environmentFSM = new EnvironmentFSM();
 
 function cleanErrorMessage(error: unknown): string {
   if (error instanceof z.ZodError) {
@@ -101,7 +103,7 @@ function wrapToolHandler<S extends z.ZodTypeAny>(
 ) {
   return async (args: unknown) => {
     const token = (args as any)?.confirmationToken;
-    const access = environmentFSM.checkToolAccess(toolName, token);
+    const access = checkToolAccess(toolName, token);
 
     if (!access.allowed) {
       return {
@@ -119,7 +121,7 @@ function wrapToolHandler<S extends z.ZodTypeAny>(
       const input = schema.parse(args);
       const result = await handler(input);
       // Mutating tools self-heal the circuit breaker to HEALTHY
-      environmentFSM.reportSuccess(toolName);
+      reportSuccess(toolName);
       const prunedResult = pruneEmptyValues(result) ?? { ok: true };
       return { content: [{ type: "text" as const, text: JSON.stringify(prunedResult) }] };
     } catch (error: any) {
@@ -135,7 +137,7 @@ function wrapToolHandler<S extends z.ZodTypeAny>(
 
       const errMsg = cleanErrorMessage(error);
       if (isResolutionError(error)) {
-        environmentFSM.reportResolutionError(toolName, errMsg);
+        reportResolutionError(toolName, errMsg);
       }
 
       return {
