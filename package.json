@@ -1,9 +1,23 @@
 {
-  "name": "pumble-mcp",
+  "name": "@infralayers/pumble-mcp",
   "version": "0.1.0",
-  "description": "MCP server wrapping Pumble's API-key REST addon — send/read/edit messages, DMs, and list users from Claude Code.",
+  "description": "Universal MCP server for Pumble — autonomous message, thread, channel, and user management for any AI agent or LLM (Cursor, Cline, Claude, Windsurf, Antigravity, OpenHands).",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "pumble-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "author": "InfraLayers",
   "repository": {
@@ -14,12 +28,25 @@
   "bugs": {
     "url": "https://github.com/infralayers/pumble-mcp/issues"
   },
-  "keywords": ["mcp", "pumble", "claude", "model-context-protocol", "chat"],
+  "keywords": [
+    "mcp",
+    "pumble",
+    "model-context-protocol",
+    "ai-agents",
+    "llm",
+    "cursor",
+    "cline",
+    "claude",
+    "windsurf",
+    "antigravity",
+    "chat"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "prepublishOnly": "npm run build && npm test",
     "start": "node dist/index.js"
   },
   "dependencies": {
