@@ -1,16 +1,18 @@
 import { z } from "zod";
-import { pumbleRequest } from "../pumbleClient.js";
+import { getUsersList, clearCache } from "./resolve.js";
 
-export const listUsersShape = {
-  confirmationToken: z.string().optional().describe("One-time security confirmation token authorized by the human user."),
-};
+export const listUsersShape = {};
 export const listUsersSchema = z.object(listUsersShape).strict();
 
 export type ListUsersInput = z.infer<typeof listUsersSchema>;
 
+export function clearListUsersCache() {
+  clearCache();
+}
+
 export async function listUsers(_input: ListUsersInput) {
-  const raw = await pumbleRequest<any[]>("/listUsers", { method: "GET" });
-  return (Array.isArray(raw) ? raw : []).map((u: any) => {
+  const users = await getUsersList();
+  return users.map((u) => {
     const res: Record<string, any> = {
       id: u.id,
       name: u.name,
